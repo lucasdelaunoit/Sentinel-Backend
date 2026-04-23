@@ -52,8 +52,7 @@ class SkillSeeder extends Seeder
             ['skill_category_id' => $lead, 'name' => 'Mentoring'],
         ];
 
-        foreach ($skills as $skill) {
+        foreach ($skills as $skill)
             Skill::factory()->create($skill);
-        }
     }
 }
