@@ -28,6 +28,7 @@ class EmployeeFactory extends Factory
                 'Security Engineer',
                 'Full Stack Developer',
             ]),
+            'is_remote' => fake()->boolean(30),
         ];
     }
 }

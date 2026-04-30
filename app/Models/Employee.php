@@ -17,7 +17,12 @@ class Employee extends Model
         'department_id',
         'name',
         'email',
-        'title'
+        'title',
+        'is_remote',
+    ];
+
+    protected $casts = [
+        'is_remote' => 'boolean',
     ];
 
     public function department(): BelongsTo

@@ -14,13 +14,15 @@ class LeaveSeeder extends Seeder
         $types = ['vacation', 'sick', 'personal', 'other'];
 
         foreach ($employees as $employee) {
-            $numLeaves = rand(0, 3);
+            $numLeaves = rand(1, 4);
             for ($i = 0; $i < $numLeaves; $i++) {
-                $start = now()->addDays(rand(1, 60));
+                // Mix past, current, and future leaves so dashboard always shows active ones
+                $offsetDays = rand(-30, 45);
+                $start = now()->addDays($offsetDays);
                 Leave::factory()->create([
                     'employee_id' => $employee->id,
                     'start_date' => $start,
-                    'end_date' => $start->copy()->addDays(rand(1, 14)),
+                    'end_date' => $start->copy()->addDays(rand(1, 10)),
                     'type' => $types[array_rand($types)],
                 ]);
             }

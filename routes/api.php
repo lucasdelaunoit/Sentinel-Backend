@@ -40,6 +40,7 @@ Route::post('/auth/login', [AuthController::class, 'login']);
     Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkill']);
 
     // Employees
+    Route::get('/employees/today', [EmployeeController::class, 'today']);
     Route::apiResource('employees', EmployeeController::class);
     Route::get('/employees/{employee}/skills', [EmployeeController::class, 'skills']);
     Route::post('/employees/{employee}/skills', [EmployeeController::class, 'attachSkill']);
