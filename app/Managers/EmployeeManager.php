@@ -2,6 +2,7 @@
 
 namespace App\Managers;
 
+use App\Enums\EmployeeStatus;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Employee;
 use App\Services\EmployeeService;
@@ -108,16 +109,16 @@ class EmployeeManager
                 'name'         => $employee->name,
                 'role'         => $employee->title,
                 'initials'     => $this->deriveInitials($employee->name),
-                'today_status' => $this->resolveStatus($employee),
+                'today_status' => $this->resolveStatus($employee)->value,
             ]);
 
         $total = $employees->count();
-        $availableCount = $employees->where('today_status', 'Available')->count();
+        $availableCount = $employees->where('today_status', EmployeeStatus::Available->value)->count();
         $capacityPct = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
 
-        $statusOrder = ['Has Leave' => 0, 'Remote' => 1, 'Available' => 2];
+        $statusOrder = [EmployeeStatus::Away->value => 0, EmployeeStatus::Available->value => 1];
         $preview = $employees
-            ->sortBy(fn($e) => $statusOrder[$e['today_status']])
+            ->sortBy(fn($e) => $statusOrder[$e['today_status']] ?? 99)
             ->values()
             ->take(5);
 
@@ -133,17 +134,9 @@ class EmployeeManager
         return $this->risk->computeEmployeeCriticality($employee);
     }
 
-    private function resolveStatus(Employee $employee): string
+    private function resolveStatus(Employee $employee): EmployeeStatus
     {
-        if ($employee->leaves->isNotEmpty()) {
-            return 'Has Leave';
-        }
-
-        if ($employee->is_remote) {
-            return 'Remote';
-        }
-
-        return 'Available';
+        return $employee->leaves->isNotEmpty() ? EmployeeStatus::Away : EmployeeStatus::Available;
     }
 
     private function deriveInitials(string $name): string

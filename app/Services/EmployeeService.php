@@ -27,7 +27,6 @@ class EmployeeService
                     );
                 }),
                 AllowedFilter::exact('department_id'),
-                AllowedFilter::exact('is_remote'),
                 AllowedFilter::callback('skill_id', function ($query, $value) {
                     $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
                 }),

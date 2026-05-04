@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EmployeeStatus;
 use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,12 +19,20 @@ class Employee extends Model
         'name',
         'email',
         'title',
-        'is_remote',
     ];
 
-    protected $casts = [
-        'is_remote' => 'boolean',
-    ];
+    protected $appends = ['status'];
+
+    public function getStatusAttribute(): EmployeeStatus
+    {
+        $today = now()->toDateString();
+        $onLeave = $this->leaves()
+            ->where('start_date', '<=', $today)
+            ->where('end_date', '>=', $today)
+            ->exists();
+
+        return $onLeave ? EmployeeStatus::Away : EmployeeStatus::Available;
+    }
 
     public function department(): BelongsTo
     {
