@@ -8,42 +8,37 @@ use Illuminate\Database\Seeder;
 
 class EmployeeSeeder extends Seeder
 {
+    private const TITLES = [
+        'Software Engineer',
+        'Senior Software Engineer',
+        'Staff Engineer',
+        'Principal Engineer',
+        'Tech Lead',
+        'Engineering Manager',
+        'Full Stack Developer',
+        'Backend Developer',
+        'Frontend Developer',
+        'DevOps Engineer',
+        'Site Reliability Engineer',
+        'Platform Engineer',
+        'Data Scientist',
+        'Data Engineer',
+        'ML Engineer',
+        'QA Engineer',
+        'Security Engineer',
+        'Product Manager',
+        'UX Designer',
+        'UX Researcher',
+    ];
+
     public function run(): void
     {
         $departments = Department::all();
-        $titles = [
-            'Software Engineer',
-            'Senior Software Engineer',
-            'Tech Lead',
-            'Product Manager',
-            'UX Designer',
-            'DevOps Engineer',
-            'Data Scientist',
-            'QA Engineer',
-            'Security Engineer',
-            'Full Stack Developer',
-        ];
+        $count = rand(6, 30);
 
-        $employees = [
-            ['name' => 'Alice Johnson', 'email' => 'alice@example.com', 'title' => 'Tech Lead'],
-            ['name' => 'Bob Smith', 'email' => 'bob@example.com', 'title' => 'Senior Software Engineer'],
-            ['name' => 'Carol Williams', 'email' => 'carol@example.com', 'title' => 'Software Engineer'],
-            ['name' => 'David Brown', 'email' => 'david@example.com', 'title' => 'DevOps Engineer'],
-            ['name' => 'Eve Davis', 'email' => 'eve@example.com', 'title' => 'Data Scientist'],
-            ['name' => 'Frank Miller', 'email' => 'frank@example.com', 'title' => 'QA Engineer'],
-            ['name' => 'Grace Wilson', 'email' => 'grace@example.com', 'title' => 'Product Manager'],
-            ['name' => 'Henry Taylor', 'email' => 'henry@example.com', 'title' => 'Full Stack Developer'],
-            ['name' => 'Ivy Anderson', 'email' => 'ivy@example.com', 'title' => 'Security Engineer'],
-            ['name' => 'Jack Thomas', 'email' => 'jack@example.com', 'title' => 'UX Designer'],
-        ];
-
-        foreach ($employees as $employee) {
-            Employee::factory()->create([
-                'department_id' => $departments->random()->id,
-                'name' => $employee['name'],
-                'email' => $employee['email'],
-                'title' => $employee['title'],
-            ]);
-        }
+        Employee::factory($count)->create([
+            'department_id' => fn() => $departments->random()->id,
+            'title' => fn() => self::TITLES[array_rand(self::TITLES)],
+        ]);
     }
 }

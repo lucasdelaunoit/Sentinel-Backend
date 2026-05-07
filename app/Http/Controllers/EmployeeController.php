@@ -102,4 +102,9 @@ class EmployeeController extends Controller
     {
         return response()->json($this->employeeManager->getTodayStatuses());
     }
+
+    public function stats(): JsonResponse
+    {
+        return response()->json($this->employeeManager->getStats());
+    }
 }

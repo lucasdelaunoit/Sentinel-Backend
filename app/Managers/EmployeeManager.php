@@ -4,9 +4,12 @@ namespace App\Managers;
 
 use App\Enums\EmployeeStatus;
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Models\Department;
 use App\Models\Employee;
+use App\Models\Project;
 use App\Services\EmployeeService;
 use App\Services\RiskCalculationService;
+use App\Services\SkillCoverageService;
 use Database\Seeders\EmployeeSkillSeeder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -20,7 +23,134 @@ class EmployeeManager
     public function __construct(
         private readonly RiskCalculationService $risk,
         private readonly EmployeeService $employeeService,
+        private readonly SkillCoverageService $coverage,
     ) {}
+
+    public function getStats(): array
+    {
+        return [
+            'total_employees'    => $this->totalEmployeesStat(),
+            'critical_employees' => $this->criticalEmployeesStat(),
+            'skill_coverage'     => $this->skillCoverageStat(),
+            'department_balance' => $this->departmentBalanceStat(),
+        ];
+    }
+
+    private function totalEmployeesStat(): array
+    {
+        $count = Employee::count();
+        $deptCount = Department::whereHas('employees')->count();
+
+        return [
+            'value'    => $count,
+            'insight'  => $deptCount > 0
+                ? "Across {$deptCount} department" . ($deptCount > 1 ? 's' : '')
+                : "No departments assigned",
+            'severity' => 'ok',
+        ];
+    }
+
+    private function criticalEmployeesStat(): array
+    {
+        $projects = Project::where('status', 'active')
+            ->with(['skillRequirements', 'employees.skills', 'employees.leaves'])
+            ->get();
+
+        $criticalIds = collect();
+
+        foreach ($projects as $project) {
+            foreach ($this->coverage->getCoverage($project) as $skill) {
+                if ($skill['status'] === 'siloed' && !empty($skill['employees'])) {
+                    $criticalIds->push($skill['employees'][0]['employee_id']);
+                }
+            }
+        }
+
+        $criticalIds = $criticalIds->unique();
+        $count = $criticalIds->count();
+        $total = Employee::count();
+        $pct = $total > 0 ? (int) round(($count / $total) * 100) : 0;
+
+        $severity = match (true) {
+            $count >= 5 => 'critical',
+            $count >= 2 => 'warning',
+            default     => 'ok',
+        };
+
+        return [
+            'value'    => $count,
+            'insight'  => $count > 0
+                ? "High-impact staff ({$pct}% of team)"
+                : "No single-point-of-failure staff",
+            'severity' => $severity,
+        ];
+    }
+
+    private function skillCoverageStat(): array
+    {
+        $projects = Project::where('status', 'active')
+            ->with(['skillRequirements', 'employees.skills', 'employees.leaves'])
+            ->get();
+
+        $total = 0;
+        $covered = 0;
+
+        foreach ($projects as $project) {
+            foreach ($this->coverage->getCoverage($project) as $skill) {
+                $total++;
+                if ($skill['status'] !== 'uncovered') {
+                    $covered++;
+                }
+            }
+        }
+
+        $pct = $total > 0 ? (int) round(($covered / $total) * 100) : 100;
+        $uncovered = $total - $covered;
+
+        $severity = match (true) {
+            $pct < 70  => 'critical',
+            $pct < 85  => 'warning',
+            default    => 'ok',
+        };
+
+        return [
+            'value'    => $pct,
+            'insight'  => $uncovered > 0
+                ? "{$uncovered} critical gap" . ($uncovered > 1 ? 's' : '')
+                : "All required skills covered",
+            'severity' => $severity,
+        ];
+    }
+
+    private function departmentBalanceStat(): array
+    {
+        $departments = Department::withCount('employees')->get();
+        $total = $departments->sum('employees_count');
+
+        if ($total === 0 || $departments->isEmpty()) {
+            return [
+                'value'    => 'Balanced',
+                'insight'  => 'No employees assigned',
+                'severity' => 'ok',
+            ];
+        }
+
+        $top = $departments->sortByDesc('employees_count')->first();
+        $maxShare = $top->employees_count / $total;
+        $maxPct = (int) round($maxShare * 100);
+
+        [$label, $severity] = match (true) {
+            $maxShare > 0.60 => ['Imbalanced', 'critical'],
+            $maxShare > 0.40 => ['Skewed', 'warning'],
+            default          => ['Balanced', 'ok'],
+        };
+
+        return [
+            'value'    => $label,
+            'insight'  => "{$top->name} {$maxPct}% of headcount",
+            'severity' => $severity,
+        ];
+    }
 
     public function getAgileEmployees(Request $request): LengthAwarePaginator
     {

@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Employees
     Route::get('/employees/today', [EmployeeController::class, 'today']);
+    Route::get('/employees/stats', [EmployeeController::class, 'stats']);
     Route::apiResource('employees', EmployeeController::class);
     Route::get('/employees/{employee}/skills', [EmployeeController::class, 'skills']);
     Route::post('/employees/{employee}/skills', [EmployeeController::class, 'attachSkill']);
