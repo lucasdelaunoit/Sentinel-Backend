@@ -15,9 +15,7 @@ class ProjectController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['status', 'search']);
-
-        return response()->json($this->manager->list($filters));
+        return response()->json($this->manager->getAgileProjects($request));
     }
 
     public function store(Request $request): JsonResponse

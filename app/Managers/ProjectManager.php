@@ -4,9 +4,11 @@ namespace App\Managers;
 
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Project;
+use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ProjectManager
@@ -14,16 +16,12 @@ class ProjectManager
     public function __construct(
         private readonly SkillCoverageService   $coverage,
         private readonly RiskCalculationService $risk,
+        private readonly ProjectService         $projectService,
     ) {}
 
-    public function list(array $filters = []): LengthAwarePaginator
+    public function getAgileProjects(Request $request): LengthAwarePaginator
     {
-        return Project::query()
-            ->when(isset($filters['status']), fn($q) => $q->where('status', $filters['status']))
-            ->when(isset($filters['search']), fn($q) => $q->where('name', 'like', "%{$filters['search']}%"))
-            ->withCount('employees')
-            ->orderByDesc('created_at')
-            ->paginate(15);
+        return $this->projectService->getAgileProjects($request);
     }
 
     public function create(array $data): Project

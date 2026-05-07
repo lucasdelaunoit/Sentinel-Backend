@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\EmployeeStatus;
 use App\Models\Employee;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -29,6 +30,21 @@ class EmployeeService
                 AllowedFilter::exact('department_id'),
                 AllowedFilter::callback('skill_id', function ($query, $value) {
                     $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
+                }),
+                AllowedFilter::callback('status', function ($query, $value) {
+                    $status = EmployeeStatus::tryFrom($value);
+                    if ($status === null) return;
+
+                    $today = now()->toDateString();
+                    $hasLeave = fn($q) => $q
+                        ->where('start_date', '<=', $today)
+                        ->where('end_date', '>=', $today);
+
+                    if ($status === EmployeeStatus::Away) {
+                        $query->whereHas('leaves', $hasLeave);
+                    } else {
+                        $query->whereDoesntHave('leaves', $hasLeave);
+                    }
                 }),
             ])
             ->allowedSorts([
