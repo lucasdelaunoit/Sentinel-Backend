@@ -17,7 +17,7 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 
 // ─── Protected ───────────────────────────────────────────────────────────────
 
-/*Route::middleware('auth:sanctum')->group(function () {*/
+Route::middleware('auth:sanctum')->group(function () {
 
     // Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -66,4 +66,5 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 
     // Departments
     Route::apiResource('departments', DepartmentController::class)->except(['show']);
-/**});*/
+});
+
