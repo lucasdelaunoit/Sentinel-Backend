@@ -40,16 +40,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkill']);
 
     /** ---------------------- [ USERS ] ---------------------- */
+    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/users/today', [UserController::class, 'getUsersTodayStatus']);
+    Route::get('/users/stats', [UserController::class, 'getUserStats']);
+
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/users', [UserController::class, 'getAgileUsers']);
     Route::post('/users', [UserController::class, 'createUser']);
     Route::get('/users/{user}', [UserController::class, 'getUser']);
     Route::put('/users/{user}', [UserController::class, 'updateUser']);
     Route::delete('/users/{user}', [UserController::class, 'deleteUser']);
-
-    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
-    Route::get('/users/today', [UserController::class, 'getUsersTodayStatus']);
-    Route::get('/users/stats', [UserController::class, 'getUserStats']);
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
