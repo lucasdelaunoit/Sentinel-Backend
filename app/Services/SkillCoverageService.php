@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Employee;
 use App\Models\Project;
+use App\Models\User;
 use Carbon\Carbon;
 
 class SkillCoverageService
@@ -13,9 +13,9 @@ class SkillCoverageService
         return $this->buildCoverage($project, []);
     }
 
-    public function getCoverageAfterAbsence(Project $project, array $excludedEmployeeIds): array
+    public function getCoverageAfterAbsence(Project $project, array $excludedUserIds): array
     {
-        return $this->buildCoverage($project, $excludedEmployeeIds);
+        return $this->buildCoverage($project, $excludedUserIds);
     }
 
     public function getRedundancy(Project $project): array
@@ -29,16 +29,16 @@ class SkillCoverageService
     {
         $project->loadMissing([
             'skillRequirements',
-            'employees.skills',
-            'employees.leaves',
+            'users.skills',
+            'users.leaves',
         ]);
 
         $today = Carbon::today();
 
         $absentIds = array_unique(array_merge(
             $excludedIds,
-            $project->employees
-                ->filter(fn(Employee $e) => $e->leaves->contains(
+            $project->users
+                ->filter(fn(User $u) => $u->leaves->contains(
                     fn($l) => Carbon::parse($l->start_date)->lte($today)
                         && Carbon::parse($l->end_date)->gte($today)
                 ))
@@ -46,7 +46,7 @@ class SkillCoverageService
                 ->all()
         ));
 
-        $available = $project->employees->whereNotIn('id', $absentIds)->values();
+        $available = $project->users->whereNotIn('id', $absentIds)->values();
 
         $result = [];
 
@@ -54,14 +54,14 @@ class SkillCoverageService
             $required = $skill->pivot->required_level;
 
             $covering = $available
-                ->filter(function (Employee $e) use ($skill, $required) {
-                    $match = $e->skills->firstWhere('id', $skill->id);
+                ->filter(function (User $u) use ($skill, $required) {
+                    $match = $u->skills->firstWhere('id', $skill->id);
                     return $match && $match->pivot->level >= $required;
                 })
-                ->map(fn(Employee $e) => [
-                    'employee_id' => $e->id,
-                    'name'        => $e->name,
-                    'level'       => $e->skills->firstWhere('id', $skill->id)->pivot->level,
+                ->map(fn(User $u) => [
+                    'user_id' => $u->id,
+                    'name'    => $u->name,
+                    'level'   => $u->skills->firstWhere('id', $skill->id)->pivot->level,
                 ])
                 ->values()
                 ->all();

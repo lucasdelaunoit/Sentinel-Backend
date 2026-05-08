@@ -11,21 +11,22 @@ class Leave extends Model
 {
     /** @use HasFactory<LeaveFactory> */
     use HasFactory;
+
     protected $fillable = [
-        'employee_id',
+        'user_id',
         'start_date',
         'end_date',
         'type',
-        'reason'
+        'reason',
     ];
 
     protected $casts = [
         'start_date' => 'date',
-        'end_date' => 'date',
+        'end_date'   => 'date',
     ];
 
-    public function employee(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(User::class);
     }
 }

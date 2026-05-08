@@ -2,44 +2,40 @@
 
 namespace App\Managers;
 
-use App\Enums\EmployeeStatus;
+use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Department;
-use App\Models\Employee;
 use App\Models\Project;
-use App\Services\EmployeeService;
+use App\Models\User;
+use App\Services\UserService;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
-use Database\Seeders\EmployeeSkillSeeder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Spatie\QueryBuilder\AllowedFilter;
-use Spatie\QueryBuilder\AllowedSort;
-use Spatie\QueryBuilder\QueryBuilder;
 
-class EmployeeManager
+class UserManager
 {
     public function __construct(
         private readonly RiskCalculationService $risk,
-        private readonly EmployeeService $employeeService,
-        private readonly SkillCoverageService $coverage,
+        private readonly UserService            $userService,
+        private readonly SkillCoverageService   $coverage,
     ) {}
 
     public function getStats(): array
     {
         return [
-            'total_employees'    => $this->totalEmployeesStat(),
-            'critical_employees' => $this->criticalEmployeesStat(),
+            'total_employees'    => $this->totalUsersStat(),
+            'critical_employees' => $this->criticalUsersStat(),
             'skill_coverage'     => $this->skillCoverageStat(),
             'department_balance' => $this->departmentBalanceStat(),
         ];
     }
 
-    private function totalEmployeesStat(): array
+    private function totalUsersStat(): array
     {
-        $count = Employee::count();
-        $deptCount = Department::whereHas('employees')->count();
+        $count     = User::count();
+        $deptCount = Department::whereHas('users')->count();
 
         return [
             'value'    => $count,
@@ -50,10 +46,10 @@ class EmployeeManager
         ];
     }
 
-    private function criticalEmployeesStat(): array
+    private function criticalUsersStat(): array
     {
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'employees.skills', 'employees.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
             ->get();
 
         $criticalIds = collect();
@@ -61,15 +57,15 @@ class EmployeeManager
         foreach ($projects as $project) {
             foreach ($this->coverage->getCoverage($project) as $skill) {
                 if ($skill['status'] === 'siloed' && !empty($skill['employees'])) {
-                    $criticalIds->push($skill['employees'][0]['employee_id']);
+                    $criticalIds->push($skill['employees'][0]['user_id']);
                 }
             }
         }
 
         $criticalIds = $criticalIds->unique();
-        $count = $criticalIds->count();
-        $total = Employee::count();
-        $pct = $total > 0 ? (int) round(($count / $total) * 100) : 0;
+        $count       = $criticalIds->count();
+        $total       = User::count();
+        $pct         = $total > 0 ? (int) round(($count / $total) * 100) : 0;
 
         $severity = match (true) {
             $count >= 5 => 'critical',
@@ -89,10 +85,10 @@ class EmployeeManager
     private function skillCoverageStat(): array
     {
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'employees.skills', 'employees.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
             ->get();
 
-        $total = 0;
+        $total   = 0;
         $covered = 0;
 
         foreach ($projects as $project) {
@@ -104,7 +100,7 @@ class EmployeeManager
             }
         }
 
-        $pct = $total > 0 ? (int) round(($covered / $total) * 100) : 100;
+        $pct       = $total > 0 ? (int) round(($covered / $total) * 100) : 100;
         $uncovered = $total - $covered;
 
         $severity = match (true) {
@@ -124,20 +120,20 @@ class EmployeeManager
 
     private function departmentBalanceStat(): array
     {
-        $departments = Department::withCount('employees')->get();
-        $total = $departments->sum('employees_count');
+        $departments = Department::withCount('users')->get();
+        $total       = $departments->sum('users_count');
 
         if ($total === 0 || $departments->isEmpty()) {
             return [
                 'value'    => 'Balanced',
-                'insight'  => 'No employees assigned',
+                'insight'  => 'No users assigned',
                 'severity' => 'ok',
             ];
         }
 
-        $top = $departments->sortByDesc('employees_count')->first();
-        $maxShare = $top->employees_count / $total;
-        $maxPct = (int) round($maxShare * 100);
+        $top      = $departments->sortByDesc('users_count')->first();
+        $maxShare = $top->users_count / $total;
+        $maxPct   = (int) round($maxShare * 100);
 
         [$label, $severity] = match (true) {
             $maxShare > 0.60 => ['Imbalanced', 'critical'],
@@ -152,19 +148,19 @@ class EmployeeManager
         ];
     }
 
-    public function getAgileEmployees(Request $request): LengthAwarePaginator
+    public function getAgileUsers(Request $request): LengthAwarePaginator
     {
-        return $this->employeeService->getAgileEmployees($request);
+        return $this->userService->getAgileUsers($request);
     }
 
-    public function create(array $data): Employee
+    public function create(array $data): User
     {
-        return DB::transaction(fn() => Employee::create($data));
+        return DB::transaction(fn() => User::create($data));
     }
 
-    public function get(Employee $employee): Employee
+    public function get(User $user): User
     {
-        return $employee->loadMissing([
+        return $user->loadMissing([
             'department',
             'skills.category',
             'projects',
@@ -172,23 +168,23 @@ class EmployeeManager
         ]);
     }
 
-    public function update(Employee $employee, array $data): Employee
+    public function update(User $user, array $data): User
     {
-        $employee->update($data);
+        $user->update($data);
 
-        return $employee->fresh(['department']);
+        return $user->fresh(['department']);
     }
 
-    public function delete(Employee $employee): void
+    public function delete(User $user): void
     {
-        $employee->delete();
+        $user->delete();
     }
 
-    public function getSkills(Employee $employee): \Illuminate\Support\Collection
+    public function getSkills(User $user): \Illuminate\Support\Collection
     {
-        $employee->loadMissing('skills.category');
+        $user->loadMissing('skills.category');
 
-        return $employee->skills->map(fn($skill) => [
+        return $user->skills->map(fn($skill) => [
             'id'       => $skill->id,
             'name'     => $skill->name,
             'category' => $skill->category?->name,
@@ -196,59 +192,59 @@ class EmployeeManager
         ]);
     }
 
-    public function attachSkill(Employee $employee, int $skillId, int $level): void
+    public function attachSkill(User $user, int $skillId, int $level): void
     {
-        DB::transaction(function () use ($employee, $skillId, $level) {
-            $employee->skills()->syncWithoutDetaching([$skillId => ['level' => $level]]);
+        DB::transaction(function () use ($user, $skillId, $level) {
+            $user->skills()->syncWithoutDetaching([$skillId => ['level' => $level]]);
         });
 
-        $this->dispatchProjectRecalculations($employee);
+        $this->dispatchProjectRecalculations($user);
     }
 
-    public function updateSkill(Employee $employee, int $skillId, int $level): void
+    public function updateSkill(User $user, int $skillId, int $level): void
     {
-        DB::transaction(function () use ($employee, $skillId, $level) {
-            $employee->skills()->updateExistingPivot($skillId, ['level' => $level]);
+        DB::transaction(function () use ($user, $skillId, $level) {
+            $user->skills()->updateExistingPivot($skillId, ['level' => $level]);
         });
 
-        $this->dispatchProjectRecalculations($employee);
+        $this->dispatchProjectRecalculations($user);
     }
 
-    public function detachSkill(Employee $employee, int $skillId): void
+    public function detachSkill(User $user, int $skillId): void
     {
-        DB::transaction(function () use ($employee, $skillId) {
-            $employee->skills()->detach($skillId);
+        DB::transaction(function () use ($user, $skillId) {
+            $user->skills()->detach($skillId);
         });
 
-        $this->dispatchProjectRecalculations($employee);
+        $this->dispatchProjectRecalculations($user);
     }
 
     public function getTodayStatuses(): array
     {
         $today = now()->toDateString();
 
-        $employees = Employee::query()
+        $users = User::query()
             ->with(['leaves' => fn($q) => $q
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
             ])
             ->orderBy('name')
             ->get()
-            ->map(fn($employee) => [
-                'id'           => $employee->id,
-                'name'         => $employee->name,
-                'role'         => $employee->title,
-                'initials'     => $this->deriveInitials($employee->name),
-                'today_status' => $this->resolveStatus($employee)->value,
+            ->map(fn($user) => [
+                'id'           => $user->id,
+                'name'         => $user->name,
+                'role'         => $user->title,
+                'initials'     => $this->deriveInitials($user->name),
+                'today_status' => $this->resolveStatus($user)->value,
             ]);
 
-        $total = $employees->count();
-        $availableCount = $employees->where('today_status', EmployeeStatus::Available->value)->count();
-        $capacityPct = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
+        $total         = $users->count();
+        $availableCount = $users->where('today_status', UserStatus::Available->value)->count();
+        $capacityPct   = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
 
-        $statusOrder = [EmployeeStatus::Away->value => 0, EmployeeStatus::Available->value => 1];
-        $preview = $employees
-            ->sortBy(fn($e) => $statusOrder[$e['today_status']] ?? 99)
+        $statusOrder = [UserStatus::Away->value => 0, UserStatus::Available->value => 1];
+        $preview     = $users
+            ->sortBy(fn($u) => $statusOrder[$u['today_status']] ?? 99)
             ->values()
             ->take(5);
 
@@ -259,29 +255,29 @@ class EmployeeManager
         ];
     }
 
-    public function getCriticality(Employee $employee): array
+    public function getCriticality(User $user): array
     {
-        return $this->risk->computeEmployeeCriticality($employee);
+        return $this->risk->computeUserCriticality($user);
     }
 
-    private function resolveStatus(Employee $employee): EmployeeStatus
+    private function resolveStatus(User $user): UserStatus
     {
-        return $employee->leaves->isNotEmpty() ? EmployeeStatus::Away : EmployeeStatus::Available;
+        return $user->leaves->isNotEmpty() ? UserStatus::Away : UserStatus::Available;
     }
 
     private function deriveInitials(string $name): string
     {
-        $parts = array_filter(explode(' ', trim($name)));
+        $parts    = array_filter(explode(' ', trim($name)));
         $initials = array_map(fn($p) => strtoupper(mb_substr($p, 0, 1)), array_values($parts));
 
         return implode('', array_slice($initials, 0, 2));
     }
 
-    private function dispatchProjectRecalculations(Employee $employee): void
+    private function dispatchProjectRecalculations(User $user): void
     {
-        $employee->loadMissing('projects');
+        $user->loadMissing('projects');
 
-        foreach ($employee->projects as $project) {
+        foreach ($user->projects as $project) {
             RecalculateProjectRiskJob::dispatch($project);
         }
     }

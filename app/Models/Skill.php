@@ -12,9 +12,10 @@ class Skill extends Model
 {
     /** @use HasFactory<SkillFactory> */
     use HasFactory;
+
     protected $fillable = [
         'skill_category_id',
-        'name'
+        'name',
     ];
 
     public function category(): BelongsTo
@@ -22,9 +23,9 @@ class Skill extends Model
         return $this->belongsTo(SkillCategory::class, 'skill_category_id');
     }
 
-    public function employees(): BelongsToMany
+    public function users(): BelongsToMany
     {
-        return $this->belongsToMany(Employee::class, 'employee_skills')
+        return $this->belongsToMany(User::class, 'user_skills')
             ->withPivot('level')
             ->withTimestamps();
     }

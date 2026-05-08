@@ -3,12 +3,12 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
-use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SkillCategoryController;
 use App\Http\Controllers\SkillController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public ──────────────────────────────────────────────────────────────────
@@ -34,24 +34,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('projects', ProjectController::class);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'coverage']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'metrics']);
-    Route::post('/projects/{project}/employees', [ProjectController::class, 'attachEmployee']);
-    Route::delete('/projects/{project}/employees/{employee}', [ProjectController::class, 'detachEmployee']);
+    Route::post('/projects/{project}/users', [ProjectController::class, 'attachUser']);
+    Route::delete('/projects/{project}/users/{user}', [ProjectController::class, 'detachUser']);
     Route::post('/projects/{project}/skills', [ProjectController::class, 'attachSkill']);
     Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkill']);
 
-    // Employees
-    Route::get('/employees/today', [EmployeeController::class, 'today']);
-    Route::get('/employees/stats', [EmployeeController::class, 'stats']);
-    Route::apiResource('employees', EmployeeController::class);
-    Route::get('/employees/{employee}/skills', [EmployeeController::class, 'skills']);
-    Route::post('/employees/{employee}/skills', [EmployeeController::class, 'attachSkill']);
-    Route::put('/employees/{employee}/skills/{skill}', [EmployeeController::class, 'updateSkill']);
-    Route::delete('/employees/{employee}/skills/{skill}', [EmployeeController::class, 'detachSkill']);
-    Route::get('/employees/{employee}/criticality', [EmployeeController::class, 'criticality']);
+    // Users
+    Route::get('/users/today', [UserController::class, 'today']);
+    Route::get('/users/stats', [UserController::class, 'stats']);
+    Route::apiResource('users', UserController::class);
+    Route::get('/users/{user}/skills', [UserController::class, 'skills']);
+    Route::post('/users/{user}/skills', [UserController::class, 'attachSkill']);
+    Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateSkill']);
+    Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkill']);
+    Route::get('/users/{user}/criticality', [UserController::class, 'criticality']);
 
-    // Leaves (scoped under employee for create/list, standalone for edit/delete)
-    Route::get('/employees/{employee}/leaves', [LeaveController::class, 'index']);
-    Route::post('/employees/{employee}/leaves', [LeaveController::class, 'store']);
+    // Leaves (scoped under user for create/list, standalone for edit/delete)
+    Route::get('/users/{user}/leaves', [LeaveController::class, 'index']);
+    Route::post('/users/{user}/leaves', [LeaveController::class, 'store']);
     Route::put('/leaves/{leave}', [LeaveController::class, 'update']);
     Route::delete('/leaves/{leave}', [LeaveController::class, 'destroy']);
 
@@ -68,4 +68,3 @@ Route::middleware('auth:sanctum')->group(function () {
     // Departments
     Route::apiResource('departments', DepartmentController::class)->except(['show']);
 });
-

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Employee;
 use App\Models\Project;
 use App\Models\SkillCategory;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,8 +22,6 @@ class RiskCalculationService
 
         if ($covered->isEmpty()) return 0;
 
-        // Greedy approximation: bus factor = min coverage count across required skills.
-        // A skill covered by N employees needs N removals before it breaks.
         return (int) $covered->min(fn($s) => count($s['employees']));
     }
 
@@ -62,11 +60,11 @@ class RiskCalculationService
 
     public function computeKCI(SkillCategory $category): float
     {
-        $category->loadMissing('skills.employees');
+        $category->loadMissing('skills.users');
 
-        $allIds       = $category->skills->flatMap(fn($s) => $s->employees->pluck('id'))->unique();
+        $allIds       = $category->skills->flatMap(fn($s) => $s->users->pluck('id'))->unique();
         $qualifiedIds = $category->skills->flatMap(fn($s) =>
-            $s->employees->filter(fn($e) => $e->pivot->level >= 3)->pluck('id')
+            $s->users->filter(fn($u) => $u->pivot->level >= 3)->pluck('id')
         )->unique();
 
         if ($allIds->isEmpty()) return 0.0;
@@ -74,13 +72,12 @@ class RiskCalculationService
         return round(($qualifiedIds->count() / $allIds->count()) * 100, 2);
     }
 
-    public function computeEmployeeCriticality(Employee $employee): array
+    public function computeUserCriticality(User $user): array
     {
-        $employee->loadMissing(['skills', 'projects.skillRequirements', 'projects.employees.skills']);
+        $user->loadMissing(['skills', 'projects.skillRequirements', 'projects.users.skills']);
 
-        // Unique skills globally (only holder)
-        $skillIds = $employee->skills->pluck('id');
-        $uniqueSkillCount = DB::table('employee_skills')
+        $skillIds = $user->skills->pluck('id');
+        $uniqueSkillCount = DB::table('user_skills')
             ->select('skill_id')
             ->whereIn('skill_id', $skillIds)
             ->groupBy('skill_id')
@@ -88,16 +85,15 @@ class RiskCalculationService
             ->pluck('skill_id')
             ->count();
 
-        // Silo and bus factor participation per project
         $siloCount      = 0;
         $busFactorCount = 0;
 
-        foreach ($employee->projects as $project) {
+        foreach ($user->projects as $project) {
             $matrix = $this->coverage->getCoverage($project);
 
             foreach ($matrix as $skillCoverage) {
                 if ($skillCoverage['status'] === 'siloed') {
-                    $inSilo = collect($skillCoverage['employees'])->contains('employee_id', $employee->id);
+                    $inSilo = collect($skillCoverage['employees'])->contains('user_id', $user->id);
                     if ($inSilo) {
                         $siloCount++;
                         break;
@@ -119,9 +115,9 @@ class RiskCalculationService
         );
 
         return [
-            'score'           => min(100, $score),
-            'unique_skills'   => $uniqueSkillCount,
-            'silo_count'      => $siloCount,
+            'score'               => min(100, $score),
+            'unique_skills'       => $uniqueSkillCount,
+            'silo_count'          => $siloCount,
             'bus_factor_projects' => $busFactorCount,
         ];
     }
@@ -130,10 +126,10 @@ class RiskCalculationService
     {
         $today = Carbon::today();
 
-        $project->loadMissing('employees.leaves');
+        $project->loadMissing('users.leaves');
 
-        $absentIds = $project->employees
-            ->filter(fn($e) => $e->leaves->contains(
+        $absentIds = $project->users
+            ->filter(fn($u) => $u->leaves->contains(
                 fn($l) => Carbon::parse($l->start_date)->lte($today)
                     && Carbon::parse($l->end_date)->gte($today)
             ))

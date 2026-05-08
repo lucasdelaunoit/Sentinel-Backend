@@ -36,7 +36,7 @@ class ProjectManager
     public function get(Project $project): Project
     {
         return $project->loadMissing([
-            'employees.department',
+            'users.department',
             'skillRequirements.category',
             'simulations',
         ]);
@@ -66,26 +66,26 @@ class ProjectManager
     public function getMetrics(Project $project): array
     {
         return [
-            'bus_factor'  => $this->risk->computeBusFactor($project),
-            'risk_score'  => $this->risk->computeRiskScore($project),
-            'health'      => $this->risk->computeHealthScore($project),
-            'redundancy'  => $this->coverage->getRedundancy($project),
+            'bus_factor' => $this->risk->computeBusFactor($project),
+            'risk_score' => $this->risk->computeRiskScore($project),
+            'health'     => $this->risk->computeHealthScore($project),
+            'redundancy' => $this->coverage->getRedundancy($project),
         ];
     }
 
-    public function attachEmployee(Project $project, int $employeeId): void
+    public function attachUser(Project $project, int $userId): void
     {
-        DB::transaction(function () use ($project, $employeeId) {
-            $project->employees()->syncWithoutDetaching([$employeeId]);
+        DB::transaction(function () use ($project, $userId) {
+            $project->users()->syncWithoutDetaching([$userId]);
         });
 
         RecalculateProjectRiskJob::dispatch($project);
     }
 
-    public function detachEmployee(Project $project, int $employeeId): void
+    public function detachUser(Project $project, int $userId): void
     {
-        DB::transaction(function () use ($project, $employeeId) {
-            $project->employees()->detach($employeeId);
+        DB::transaction(function () use ($project, $userId) {
+            $project->users()->detach($userId);
         });
 
         RecalculateProjectRiskJob::dispatch($project);

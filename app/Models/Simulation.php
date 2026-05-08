@@ -12,11 +12,12 @@ class Simulation extends Model
 {
     /** @use HasFactory<SimulationFactory> */
     use HasFactory;
+
     protected $fillable = [
         'project_id',
         'name',
         'description',
-        'result'
+        'result',
     ];
 
     protected $casts = [
@@ -28,9 +29,9 @@ class Simulation extends Model
         return $this->belongsTo(Project::class);
     }
 
-    public function absentEmployees(): BelongsToMany
+    public function absentUsers(): BelongsToMany
     {
-        return $this->belongsToMany(Employee::class, 'simulation_leaves')
+        return $this->belongsToMany(User::class, 'simulation_leaves')
             ->withTimestamps();
     }
 }

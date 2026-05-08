@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Managers\ProjectManager;
-use App\Models\Employee;
 use App\Models\Project;
 use App\Models\Skill;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -68,20 +68,20 @@ class ProjectController extends Controller
         return response()->json($this->manager->getMetrics($project));
     }
 
-    public function attachEmployee(Request $request, Project $project): JsonResponse
+    public function attachUser(Request $request, Project $project): JsonResponse
     {
         $data = $request->validate([
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
+            'user_id' => ['required', 'integer', 'exists:users,id'],
         ]);
 
-        $this->manager->attachEmployee($project, $data['employee_id']);
+        $this->manager->attachUser($project, $data['user_id']);
 
-        return response()->json(['message' => 'Employee attached']);
+        return response()->json(['message' => 'User attached']);
     }
 
-    public function detachEmployee(Project $project, Employee $employee): JsonResponse
+    public function detachUser(Project $project, User $user): JsonResponse
     {
-        $this->manager->detachEmployee($project, $employee->id);
+        $this->manager->detachUser($project, $user->id);
 
         return response()->json(null, 204);
     }

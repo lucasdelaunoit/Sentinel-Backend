@@ -12,6 +12,7 @@ class Project extends Model
 {
     /** @use HasFactory<ProjectFactory> */
     use HasFactory;
+
     protected $fillable = [
         'name',
         'description',
@@ -26,12 +27,12 @@ class Project extends Model
 
     protected $casts = [
         'started_at' => 'date',
-        'ended_at' => 'date',
+        'ended_at'   => 'date',
     ];
 
-    public function employees(): BelongsToMany
+    public function users(): BelongsToMany
     {
-        return $this->belongsToMany(Employee::class, 'project_employees')
+        return $this->belongsToMany(User::class, 'project_users')
             ->withTimestamps();
     }
 

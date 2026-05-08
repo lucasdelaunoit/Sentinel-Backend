@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Employee;
 use App\Models\Department;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class EmployeeSeeder extends Seeder
@@ -34,11 +34,11 @@ class EmployeeSeeder extends Seeder
     public function run(): void
     {
         $departments = Department::all();
-        $count = rand(6, 30);
+        $count       = rand(6, 30);
 
-        Employee::factory($count)->create([
+        User::factory($count)->create([
             'department_id' => fn() => $departments->random()->id,
-            'title' => fn() => self::TITLES[array_rand(self::TITLES)],
+            'title'         => fn() => self::TITLES[array_rand(self::TITLES)],
         ]);
     }
 }

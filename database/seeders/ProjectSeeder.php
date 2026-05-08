@@ -3,70 +3,69 @@
 namespace Database\Seeders;
 
 use App\Models\Project;
-use App\Models\Employee;
-use App\Models\Skill;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class ProjectSeeder extends Seeder
 {
     public function run(): void
     {
-        $employees = Employee::all();
+        $users = User::all();
 
         $projects = [
             [
-                'name' => 'API Platform Modernization',
+                'name'        => 'API Platform Modernization',
                 'description' => 'Migrate legacy API to modern REST architecture',
-                'status' => 'active',
-                'progress' => 45,
+                'status'      => 'active',
+                'progress'    => 45,
             ],
             [
-                'name' => 'Customer Portal v2',
+                'name'        => 'Customer Portal v2',
                 'description' => 'Complete redesign of customer-facing portal',
-                'status' => 'active',
-                'progress' => 30,
+                'status'      => 'active',
+                'progress'    => 30,
             ],
             [
-                'name' => 'Data Pipeline Optimization',
+                'name'        => 'Data Pipeline Optimization',
                 'description' => 'Improve ETL processes for analytics dashboard',
-                'status' => 'active',
-                'progress' => 70,
+                'status'      => 'active',
+                'progress'    => 70,
             ],
             [
-                'name' => 'Mobile App Launch',
+                'name'        => 'Mobile App Launch',
                 'description' => 'iOS and Android app for customer engagement',
-                'status' => 'active',
-                'progress' => 15,
+                'status'      => 'active',
+                'progress'    => 15,
             ],
             [
-                'name' => 'Security Audit System',
+                'name'        => 'Security Audit System',
                 'description' => 'Automated security compliance checking',
-                'status' => 'active',
-                'progress' => 60,
+                'status'      => 'active',
+                'progress'    => 60,
             ],
             [
-                'name' => 'Infrastructure Migration',
+                'name'        => 'Infrastructure Migration',
                 'description' => 'Move from on-premise to cloud infrastructure',
-                'status' => 'on_hold',
-                'progress' => 25,
+                'status'      => 'on_hold',
+                'progress'    => 25,
             ],
             [
-                'name' => 'ML Model Deployment',
+                'name'        => 'ML Model Deployment',
                 'description' => 'Deploy machine learning models to production',
-                'status' => 'active',
-                'progress' => 55,
+                'status'      => 'active',
+                'progress'    => 55,
             ],
             [
-                'name' => 'Real-time Notification Service',
+                'name'        => 'Real-time Notification Service',
                 'description' => 'WebSocket-based notification system',
-                'status' => 'completed',
-                'progress' => 100,
+                'status'      => 'completed',
+                'progress'    => 100,
             ],
         ];
 
         foreach ($projects as $projectData) {
             $project = Project::factory()->create($projectData);
-            $project->employees()->attach($employees->random(rand(2, 5))->pluck('id'));
+            $project->users()->attach($users->random(rand(2, 5))->pluck('id'));
         }
     }
 }

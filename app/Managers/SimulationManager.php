@@ -17,7 +17,7 @@ class SimulationManager
     {
         return Simulation::query()
             ->with('project')
-            ->withCount('absentEmployees')
+            ->withCount('absentUsers')
             ->orderByDesc('created_at')
             ->paginate(15);
     }
@@ -31,8 +31,8 @@ class SimulationManager
                 'description' => $data['description'] ?? null,
             ]);
 
-            if (!empty($data['absent_employee_ids'])) {
-                $sim->absentEmployees()->sync($data['absent_employee_ids']);
+            if (!empty($data['absent_user_ids'])) {
+                $sim->absentUsers()->sync($data['absent_user_ids']);
             }
 
             return $sim;
@@ -43,12 +43,12 @@ class SimulationManager
         $simulation->update(['result' => $result]);
         $simulation->result = $result;
 
-        return $simulation->load(['project', 'absentEmployees']);
+        return $simulation->load(['project', 'absentUsers']);
     }
 
     public function get(Simulation $simulation): Simulation
     {
-        return $simulation->loadMissing(['project', 'absentEmployees']);
+        return $simulation->loadMissing(['project', 'absentUsers']);
     }
 
     public function delete(Simulation $simulation): void

@@ -2,20 +2,20 @@
 
 namespace App\Managers;
 
-use App\Models\Employee;
 use App\Models\Leave;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
 class LeaveManager
 {
-    public function getByEmployee(Employee $employee): Collection
+    public function getByUser(User $user): Collection
     {
-        return $employee->leaves()->orderByDesc('start_date')->get();
+        return $user->leaves()->orderByDesc('start_date')->get();
     }
 
-    public function create(Employee $employee, array $data): Leave
+    public function create(User $user, array $data): Leave
     {
-        return $employee->leaves()->create($data);
+        return $user->leaves()->create($data);
     }
 
     public function update(Leave $leave, array $data): Leave

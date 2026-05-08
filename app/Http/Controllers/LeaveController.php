@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Managers\LeaveManager;
-use App\Models\Employee;
 use App\Models\Leave;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,12 +12,12 @@ class LeaveController extends Controller
 {
     public function __construct(private readonly LeaveManager $manager) {}
 
-    public function index(Employee $employee): JsonResponse
+    public function index(User $user): JsonResponse
     {
-        return response()->json($this->manager->getByEmployee($employee));
+        return response()->json($this->manager->getByUser($user));
     }
 
-    public function store(Request $request, Employee $employee): JsonResponse
+    public function store(Request $request, User $user): JsonResponse
     {
         $data = $request->validate([
             'start_date' => ['required', 'date'],
@@ -26,7 +26,7 @@ class LeaveController extends Controller
             'reason'     => ['nullable', 'string'],
         ]);
 
-        return response()->json($this->manager->create($employee, $data), 201);
+        return response()->json($this->manager->create($user, $data), 201);
     }
 
     public function update(Request $request, Leave $leave): JsonResponse

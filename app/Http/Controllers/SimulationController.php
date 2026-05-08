@@ -19,11 +19,11 @@ class SimulationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'project_id'           => ['required', 'integer', 'exists:projects,id'],
-            'name'                 => ['required', 'string', 'max:255'],
-            'description'          => ['nullable', 'string'],
-            'absent_employee_ids'  => ['required', 'array', 'min:1'],
-            'absent_employee_ids.*' => ['integer', 'exists:employees,id'],
+            'project_id'          => ['required', 'integer', 'exists:projects,id'],
+            'name'                => ['required', 'string', 'max:255'],
+            'description'         => ['nullable', 'string'],
+            'absent_user_ids'     => ['required', 'array', 'min:1'],
+            'absent_user_ids.*'   => ['integer', 'exists:users,id'],
         ]);
 
         return response()->json($this->manager->create($data), 201);

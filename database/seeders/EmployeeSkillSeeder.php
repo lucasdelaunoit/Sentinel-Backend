@@ -2,21 +2,21 @@
 
 namespace Database\Seeders;
 
-use App\Models\Employee;
 use App\Models\Skill;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class EmployeeSkillSeeder extends Seeder
 {
     public function run(): void
     {
-        $employees = Employee::all();
+        $users  = User::all();
         $skills = Skill::all();
 
-        foreach ($employees as $employee) {
-            $employeeSkills = $skills->random(rand(3, 8));
-            foreach ($employeeSkills as $skill) {
-                $employee->skills()->attach($skill->id, ['level' => rand(1, 5)]);
+        foreach ($users as $user) {
+            $userSkills = $skills->random(rand(3, 8));
+            foreach ($userSkills as $skill) {
+                $user->skills()->attach($skill->id, ['level' => rand(1, 5)]);
             }
         }
     }

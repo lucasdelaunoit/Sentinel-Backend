@@ -11,10 +11,10 @@ return new class extends Migration
         Schema::create('simulation_leaves', function (Blueprint $table) {
             $table->id();
             $table->foreignId('simulation_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['simulation_id', 'employee_id']);
+            $table->unique(['simulation_id', 'user_id']);
         });
     }
 

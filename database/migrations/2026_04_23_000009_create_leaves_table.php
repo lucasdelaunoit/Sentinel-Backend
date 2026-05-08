@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('leaves', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->date('start_date');
             $table->date('end_date');
             $table->string('type')->default('vacation'); // vacation, sick, other
