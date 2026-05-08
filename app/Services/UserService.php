@@ -12,6 +12,15 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class UserService
 {
+    /**
+     * <summary>
+     *  Build a paginated, filterable, sortable query for users using Spatie QueryBuilder.
+     *  Supports search (name/email), department, skill and status filters.
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return LengthAwarePaginator Paginated users with department and skills.category
+     */
     public function getAgileUsers(Request $request): LengthAwarePaginator
     {
         if ($request->filled('search') && !$request->has('filter.search')) {

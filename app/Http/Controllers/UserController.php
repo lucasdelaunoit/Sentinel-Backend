@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AttachUserSkillRequest;
+use App\Http\Requests\StoreUserRequest;
+use App\Http\Requests\UpdateUserRequest;
+use App\Http\Requests\UpdateUserSkillRequest;
+use App\Http\Resources\UserResource;
 use App\Managers\UserManager;
 use App\Models\Skill;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class UserController extends Controller
 {
@@ -14,94 +20,173 @@ class UserController extends Controller
         private readonly UserManager $userManager
     ) {}
 
-    public function index(Request $request): JsonResponse
+    /**
+     * <summary>
+     *  Retrieve all users (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return AnonymousResourceCollection Paginated list of users
+     */
+    public function getAgileUsers(Request $request): AnonymousResourceCollection
     {
-        return response()->json($this->userManager->getAgileUsers($request));
+        return UserResource::collection($this->userManager->getAgileUsers($request));
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * <summary>
+     *  Create a new user.
+     * </summary>
+     *
+     * @param StoreUserRequest $request name, email, title, department_id
+     * @return UserResource Created user — HTTP 201
+     */
+    public function createUser(StoreUserRequest $request): UserResource
     {
-        $data = $request->validate([
-            'name'          => ['required', 'string', 'max:255'],
-            'email'         => ['required', 'email', 'unique:users,email'],
-            'title'         => ['nullable', 'string', 'max:255'],
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-        ]);
-
-        return response()->json($this->userManager->create($data), 201);
+        return UserResource::make($this->userManager->createUser($request->validated()))
+            ->response()
+            ->setStatusCode(201);
     }
 
-    public function show(User $user): JsonResponse
+    /**
+     * <summary>
+     *  Retrieve a single user with all relations.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return UserResource User with department, skills, projects and leaves
+     */
+    public function getUser(User $user): UserResource
     {
-        return response()->json($this->userManager->get($user));
+        return UserResource::make($this->userManager->getUser($user));
     }
 
-    public function update(Request $request, User $user): JsonResponse
+    /**
+     * <summary>
+     *  Update an existing user.
+     * </summary>
+     *
+     * @param UpdateUserRequest $request Fields to update (all optional)
+     * @param User              $user    Route-model bound user
+     * @return UserResource Updated user
+     */
+    public function updateUser(UpdateUserRequest $request, User $user): UserResource
     {
-        $data = $request->validate([
-            'name'          => ['sometimes', 'string', 'max:255'],
-            'email'         => ['sometimes', 'email', "unique:users,email,{$user->id}"],
-            'title'         => ['nullable', 'string', 'max:255'],
-            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-        ]);
-
-        return response()->json($this->userManager->update($user, $data));
+        return UserResource::make($this->userManager->updateUser($user, $request->validated()));
     }
 
-    public function destroy(User $user): JsonResponse
+    /**
+     * <summary>
+     *  Delete a user.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse HTTP 204 No Content
+     */
+    public function deleteUser(User $user): JsonResponse
     {
-        $this->userManager->delete($user);
+        $this->userManager->deleteUser($user);
 
         return response()->json(null, 204);
     }
 
-    public function skills(User $user): JsonResponse
+    /**
+     * <summary>
+     *  List all skills for a user with their proficiency levels.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse Collection of skills with id, name, category and level
+     */
+    public function getUserSkills(User $user): JsonResponse
     {
-        return response()->json($this->userManager->getSkills($user));
+        return response()->json($this->userManager->getUserSkills($user));
     }
 
-    public function attachSkill(Request $request, User $user): JsonResponse
+    /**
+     * <summary>
+     *  Attach a skill to a user.
+     * </summary>
+     *
+     * @param AttachUserSkillRequest $request skill_id and level (1–5)
+     * @param User                   $user    Route-model bound user
+     * @return JsonResponse HTTP 200 confirmation message
+     */
+    public function attachSkillToUser(AttachUserSkillRequest $request, User $user): JsonResponse
     {
-        $data = $request->validate([
-            'skill_id' => ['required', 'integer', 'exists:skills,id'],
-            'level'    => ['required', 'integer', 'min:1', 'max:5'],
-        ]);
-
-        $this->userManager->attachSkill($user, $data['skill_id'], $data['level']);
+        $data = $request->validated();
+        $this->userManager->attachSkillToUser($user, $data['skill_id'], $data['level']);
 
         return response()->json(['message' => 'Skill added']);
     }
 
-    public function updateSkill(Request $request, User $user, Skill $skill): JsonResponse
+    /**
+     * <summary>
+     *  Update the proficiency level of an existing user skill.
+     * </summary>
+     *
+     * @param UpdateUserSkillRequest $request level (1–5)
+     * @param User                   $user    Route-model bound user
+     * @param Skill                  $skill   Route-model bound skill
+     * @return JsonResponse HTTP 200 confirmation message
+     */
+    public function updateUserSkill(UpdateUserSkillRequest $request, User $user, Skill $skill): JsonResponse
     {
-        $data = $request->validate([
-            'level' => ['required', 'integer', 'min:1', 'max:5'],
-        ]);
-
-        $this->userManager->updateSkill($user, $skill->id, $data['level']);
+        $this->userManager->updateUserSkill($user, $skill->id, $request->validated()['level']);
 
         return response()->json(['message' => 'Skill level updated']);
     }
 
-    public function detachSkill(User $user, Skill $skill): JsonResponse
+    /**
+     * <summary>
+     *  Detach a skill from a user.
+     * </summary>
+     *
+     * @param User  $user  Route-model bound user
+     * @param Skill $skill Route-model bound skill
+     * @return JsonResponse HTTP 204 No Content
+     */
+    public function detachSkillFromUser(User $user, Skill $skill): JsonResponse
     {
-        $this->userManager->detachSkill($user, $skill->id);
+        $this->userManager->detachSkillFromUser($user, $skill->id);
 
         return response()->json(null, 204);
     }
 
-    public function criticality(User $user): JsonResponse
+    /**
+     * <summary>
+     *  Compute criticality score for a user.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse Criticality breakdown (silo count, bus factor contributions, score)
+     */
+    public function getUserCriticality(User $user): JsonResponse
     {
-        return response()->json($this->userManager->getCriticality($user));
+        return response()->json($this->userManager->getUserCriticality($user));
     }
 
-    public function today(): JsonResponse
+    /**
+     * <summary>
+     *  Get today's availability status for all users.
+     * </summary>
+     *
+     * @return JsonResponse capacity_pct, total, and top-5 employee preview
+     */
+    public function getUsersTodayStatus(): JsonResponse
     {
-        return response()->json($this->userManager->getTodayStatuses());
+        return response()->json($this->userManager->getUsersTodayStatus());
     }
 
-    public function stats(): JsonResponse
+    /**
+     * <summary>
+     *  Get aggregate employee statistics for the dashboard.
+     * </summary>
+     *
+     * @return JsonResponse total_employees, critical_employees, skill_coverage, department_balance
+     */
+    public function getUserStats(): JsonResponse
     {
-        return response()->json($this->userManager->getStats());
+        return response()->json($this->userManager->getUserStats());
     }
 }

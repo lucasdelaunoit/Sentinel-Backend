@@ -12,6 +12,7 @@ use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class UserManager
@@ -22,17 +23,233 @@ class UserManager
         private readonly SkillCoverageService   $coverage,
     ) {}
 
-    public function getStats(): array
+    /**
+     * <summary>
+     *  Retrieve paginated, filterable, sortable list of users via Spatie QueryBuilder.
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return LengthAwarePaginator Paginated users with department and skills
+     */
+    public function getAgileUsers(Request $request): LengthAwarePaginator
+    {
+        return $this->userService->getAgileUsers($request);
+    }
+
+    /**
+     * <summary>
+     *  Create a new user record.
+     * </summary>
+     *
+     * @param array $data Validated fields: name, email, title, department_id
+     * @return User Newly created user
+     */
+    public function createUser(array $data): User
+    {
+        return DB::transaction(fn() => User::create($data));
+    }
+
+    /**
+     * <summary>
+     *  Retrieve a single user with all relations loaded.
+     * </summary>
+     *
+     * @param User $user User model instance
+     * @return User User with department, skills (+ category), projects and leaves
+     */
+    public function getUser(User $user): User
+    {
+        return $user->loadMissing([
+            'department',
+            'skills.category',
+            'projects',
+            'leaves',
+        ]);
+    }
+
+    /**
+     * <summary>
+     *  Update fields on an existing user.
+     * </summary>
+     *
+     * @param User  $user User model instance
+     * @param array $data Validated fields to update
+     * @return User Updated user with department relation
+     */
+    public function updateUser(User $user, array $data): User
+    {
+        $user->update($data);
+
+        return $user->fresh(['department']);
+    }
+
+    /**
+     * <summary>
+     *  Delete a user.
+     * </summary>
+     *
+     * @param User $user User model instance
+     * @return void
+     */
+    public function deleteUser(User $user): void
+    {
+        $user->delete();
+    }
+
+    /**
+     * <summary>
+     *  List all skills attached to a user with their proficiency levels.
+     * </summary>
+     *
+     * @param User $user User model instance
+     * @return Collection Each item: id, name, category, level
+     */
+    public function getUserSkills(User $user): Collection
+    {
+        $user->loadMissing('skills.category');
+
+        return $user->skills->map(fn($skill) => [
+            'id'       => $skill->id,
+            'name'     => $skill->name,
+            'category' => $skill->category?->name,
+            'level'    => $skill->pivot->level,
+        ]);
+    }
+
+    /**
+     * <summary>
+     *  Attach a skill to a user at a given proficiency level.
+     *  Dispatches project risk recalculation jobs after attachment.
+     * </summary>
+     *
+     * @param User $user    User model instance
+     * @param int  $skillId Target skill ID
+     * @param int  $level   Proficiency level (1–5)
+     * @return void
+     */
+    public function attachSkillToUser(User $user, int $skillId, int $level): void
+    {
+        DB::transaction(function () use ($user, $skillId, $level) {
+            $user->skills()->syncWithoutDetaching([$skillId => ['level' => $level]]);
+        });
+
+        $this->dispatchProjectRecalculations($user);
+    }
+
+    /**
+     * <summary>
+     *  Update the proficiency level of an already-attached skill.
+     *  Dispatches project risk recalculation jobs after update.
+     * </summary>
+     *
+     * @param User $user    User model instance
+     * @param int  $skillId Target skill ID
+     * @param int  $level   New proficiency level (1–5)
+     * @return void
+     */
+    public function updateUserSkill(User $user, int $skillId, int $level): void
+    {
+        DB::transaction(function () use ($user, $skillId, $level) {
+            $user->skills()->updateExistingPivot($skillId, ['level' => $level]);
+        });
+
+        $this->dispatchProjectRecalculations($user);
+    }
+
+    /**
+     * <summary>
+     *  Detach a skill from a user.
+     *  Dispatches project risk recalculation jobs after detachment.
+     * </summary>
+     *
+     * @param User $user    User model instance
+     * @param int  $skillId Target skill ID
+     * @return void
+     */
+    public function detachSkillFromUser(User $user, int $skillId): void
+    {
+        DB::transaction(function () use ($user, $skillId) {
+            $user->skills()->detach($skillId);
+        });
+
+        $this->dispatchProjectRecalculations($user);
+    }
+
+    /**
+     * <summary>
+     *  Compute the criticality score for a user across all active projects.
+     * </summary>
+     *
+     * @param User $user User model instance
+     * @return array Criticality breakdown: silo_count, bus_factor_contributions, score
+     */
+    public function getUserCriticality(User $user): array
+    {
+        return $this->risk->computeUserCriticality($user);
+    }
+
+    /**
+     * <summary>
+     *  Get today's availability status for all users.
+     *  Returns a capacity percentage and a top-5 preview sorted by absence first.
+     * </summary>
+     *
+     * @return array capacity_pct, total, employees (top-5 preview)
+     */
+    public function getUsersTodayStatus(): array
+    {
+        $today = now()->toDateString();
+
+        $users = User::query()
+            ->with(['leaves' => fn($q) => $q
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(fn($user) => [
+                'id'           => $user->id,
+                'name'         => $user->name,
+                'role'         => $user->title,
+                'initials'     => $this->deriveInitials($user->name),
+                'today_status' => $this->resolveStatus($user)->value,
+            ]);
+
+        $total          = $users->count();
+        $availableCount = $users->where('today_status', UserStatus::Available->value)->count();
+        $capacityPct    = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
+
+        $statusOrder = [UserStatus::Away->value => 0, UserStatus::Available->value => 1];
+        $preview     = $users
+            ->sortBy(fn($u) => $statusOrder[$u['today_status']] ?? 99)
+            ->values()
+            ->take(5);
+
+        return [
+            'capacity_pct' => $capacityPct,
+            'total'        => $total,
+            'employees'    => $preview->values()->all(),
+        ];
+    }
+
+    /**
+     * <summary>
+     *  Get aggregate employee statistics for dashboard KPIs.
+     * </summary>
+     *
+     * @return array total_employees, critical_employees, skill_coverage, department_balance
+     */
+    public function getUserStats(): array
     {
         return [
-            'total_employees'    => $this->totalUsersStat(),
-            'critical_employees' => $this->criticalUsersStat(),
+            'total_employees'    => $this->totalEmployeesStat(),
+            'critical_employees' => $this->criticalEmployeesStat(),
             'skill_coverage'     => $this->skillCoverageStat(),
             'department_balance' => $this->departmentBalanceStat(),
         ];
     }
 
-    private function totalUsersStat(): array
+    private function totalEmployeesStat(): array
     {
         $count     = User::count();
         $deptCount = Department::whereHas('users')->count();
@@ -46,7 +263,7 @@ class UserManager
         ];
     }
 
-    private function criticalUsersStat(): array
+    private function criticalEmployeesStat(): array
     {
         $projects = Project::where('status', 'active')
             ->with(['skillRequirements', 'users.skills', 'users.leaves'])
@@ -146,118 +363,6 @@ class UserManager
             'insight'  => "{$top->name} {$maxPct}% of headcount",
             'severity' => $severity,
         ];
-    }
-
-    public function getAgileUsers(Request $request): LengthAwarePaginator
-    {
-        return $this->userService->getAgileUsers($request);
-    }
-
-    public function create(array $data): User
-    {
-        return DB::transaction(fn() => User::create($data));
-    }
-
-    public function get(User $user): User
-    {
-        return $user->loadMissing([
-            'department',
-            'skills.category',
-            'projects',
-            'leaves',
-        ]);
-    }
-
-    public function update(User $user, array $data): User
-    {
-        $user->update($data);
-
-        return $user->fresh(['department']);
-    }
-
-    public function delete(User $user): void
-    {
-        $user->delete();
-    }
-
-    public function getSkills(User $user): \Illuminate\Support\Collection
-    {
-        $user->loadMissing('skills.category');
-
-        return $user->skills->map(fn($skill) => [
-            'id'       => $skill->id,
-            'name'     => $skill->name,
-            'category' => $skill->category?->name,
-            'level'    => $skill->pivot->level,
-        ]);
-    }
-
-    public function attachSkill(User $user, int $skillId, int $level): void
-    {
-        DB::transaction(function () use ($user, $skillId, $level) {
-            $user->skills()->syncWithoutDetaching([$skillId => ['level' => $level]]);
-        });
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    public function updateSkill(User $user, int $skillId, int $level): void
-    {
-        DB::transaction(function () use ($user, $skillId, $level) {
-            $user->skills()->updateExistingPivot($skillId, ['level' => $level]);
-        });
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    public function detachSkill(User $user, int $skillId): void
-    {
-        DB::transaction(function () use ($user, $skillId) {
-            $user->skills()->detach($skillId);
-        });
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    public function getTodayStatuses(): array
-    {
-        $today = now()->toDateString();
-
-        $users = User::query()
-            ->with(['leaves' => fn($q) => $q
-                ->whereDate('start_date', '<=', $today)
-                ->whereDate('end_date', '>=', $today)
-            ])
-            ->orderBy('name')
-            ->get()
-            ->map(fn($user) => [
-                'id'           => $user->id,
-                'name'         => $user->name,
-                'role'         => $user->title,
-                'initials'     => $this->deriveInitials($user->name),
-                'today_status' => $this->resolveStatus($user)->value,
-            ]);
-
-        $total         = $users->count();
-        $availableCount = $users->where('today_status', UserStatus::Available->value)->count();
-        $capacityPct   = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
-
-        $statusOrder = [UserStatus::Away->value => 0, UserStatus::Available->value => 1];
-        $preview     = $users
-            ->sortBy(fn($u) => $statusOrder[$u['today_status']] ?? 99)
-            ->values()
-            ->take(5);
-
-        return [
-            'capacity_pct' => $capacityPct,
-            'total'        => $total,
-            'employees'    => $preview->values()->all(),
-        ];
-    }
-
-    public function getCriticality(User $user): array
-    {
-        return $this->risk->computeUserCriticality($user);
     }
 
     private function resolveStatus(User $user): UserStatus

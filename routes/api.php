@@ -39,15 +39,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/skills', [ProjectController::class, 'attachSkill']);
     Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkill']);
 
-    // Users
-    Route::get('/users/today', [UserController::class, 'today']);
-    Route::get('/users/stats', [UserController::class, 'stats']);
-    Route::apiResource('users', UserController::class);
-    Route::get('/users/{user}/skills', [UserController::class, 'skills']);
-    Route::post('/users/{user}/skills', [UserController::class, 'attachSkill']);
-    Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateSkill']);
-    Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkill']);
-    Route::get('/users/{user}/criticality', [UserController::class, 'criticality']);
+    /** ---------------------- [ USERS ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/users', [UserController::class, 'getAgileUsers']);
+    Route::post('/users', [UserController::class, 'createUser']);
+    Route::get('/users/{user}', [UserController::class, 'getUser']);
+    Route::put('/users/{user}', [UserController::class, 'updateUser']);
+    Route::delete('/users/{user}', [UserController::class, 'deleteUser']);
+
+    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/users/today', [UserController::class, 'getUsersTodayStatus']);
+    Route::get('/users/stats', [UserController::class, 'getUserStats']);
+
+    /* ----------------- USER-RELATED ENDPOINTS ----------------- */
+    Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
+    Route::get('/users/{user}/skills', [UserController::class, 'getUserSkills']);
+    Route::post('/users/{user}/skills', [UserController::class, 'attachSkillToUser']);
+    Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);
+    Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkillFromUser']);
 
     // Leaves (scoped under user for create/list, standalone for edit/delete)
     Route::get('/users/{user}/leaves', [LeaveController::class, 'index']);
