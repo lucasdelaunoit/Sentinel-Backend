@@ -6,30 +6,30 @@ use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\User;
 use App\Services\RiskCalculationService;
+use App\Services\SkillCategoryService;
 use App\Services\UserService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class UserManager
+class SkillCategoryManager
 {
     public function __construct(
-        private readonly RiskCalculationService $riskService,
-        private readonly UserService            $userService,
+        private readonly SkillCategoryService $skillCategoryService,
     ) {}
 
     /**
      * <summary>
-     *  Retrieve paginated, filterable, sortable list of users via Spatie QueryBuilder.
+     *  Retrieve all skill categories.
      * </summary>
      *
-     * @param Request $request Pagination, filter, sort & search parameters
-     * @return LengthAwarePaginator Paginated users with department and skills
+     * @return Collection Collection of skill categories
      */
-    public function getAgileUsers(Request $request): LengthAwarePaginator
+    public function getAgileSkillCategories(): Collection
     {
-        return $this->userService->getAgileUsers($request);
+        return $this->skillCategoryService->getAgileSkillCategories();
     }
 
     /**

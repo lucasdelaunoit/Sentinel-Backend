@@ -2,46 +2,102 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreSkillRequest;
+use App\Http\Requests\UpdateSkillRequest;
 use App\Managers\SkillManager;
 use App\Models\Skill;
+use App\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SkillController extends Controller
 {
-    public function __construct(private readonly SkillManager $manager) {}
+    public function __construct(
+        private readonly SkillManager $skillManager
+    ) {}
 
-    public function index(Request $request): JsonResponse
+    /**
+     * <summary>
+     *  Retrieve paginated, filterable, sortable list of skills for a specific user.
+     * </summary>
+     *
+     * @param Request $request Pagination, filter (search, category_id), sort parameters
+     * @param User    $user    Route-model bound user
+     * @return LengthAwarePaginator Paginated skills with category
+     */
+    public function getAgileSkillsForUser(Request $request, User $user): LengthAwarePaginator
     {
-        $filters = $request->only(['category_id', 'search']);
-
-        return response()->json($this->manager->listSkills($filters));
+        // Act (Manager)
+        return $this->skillManager->getAgileSkillsForUser($request, $user);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * <summary>
+     *  Retrieve all skills (filterable by category and search term).
+     * </summary>
+     *
+     * @param Request $request Filter parameters: category_id, search
+     * @return JsonResponse Collection of skills with category
+     */
+    public function listSkills(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'name'              => ['required', 'string', 'max:255'],
-            'skill_category_id' => ['required', 'integer', 'exists:skill_categories,id'],
-        ]);
+        // Act (Manager)
+        $skills = $this->skillManager->listSkills($request->only(['category_id', 'search']));
 
-        return response()->json($this->manager->createSkill($data), 201);
+        // Return (Controller)
+        return response()->json($skills);
     }
 
-    public function update(Request $request, Skill $skill): JsonResponse
+    /**
+     * <summary>
+     *  Create a new skill.
+     * </summary>
+     *
+     * @param StoreSkillRequest $request name, skill_category_id
+     * @return JsonResponse Created skill — HTTP 201
+     */
+    public function createSkill(StoreSkillRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name'              => ['sometimes', 'string', 'max:255'],
-            'skill_category_id' => ['sometimes', 'integer', 'exists:skill_categories,id'],
-        ]);
+        // Act (Manager)
+        $skill = $this->skillManager->createSkill($request->validated());
 
-        return response()->json($this->manager->updateSkill($skill, $data));
+        // Return (Controller)
+        return response()->json($skill, 201);
     }
 
-    public function destroy(Skill $skill): JsonResponse
+    /**
+     * <summary>
+     *  Update an existing skill.
+     * </summary>
+     *
+     * @param UpdateSkillRequest $request Fields to update (all optional)
+     * @param Skill              $skill   Route-model bound skill
+     * @return JsonResponse Updated skill
+     */
+    public function updateSkill(UpdateSkillRequest $request, Skill $skill): JsonResponse
     {
-        $this->manager->deleteSkill($skill);
+        // Act (Manager)
+        $skill = $this->skillManager->updateSkill($skill, $request->validated());
 
+        // Return (Controller)
+        return response()->json($skill);
+    }
+
+    /**
+     * <summary>
+     *  Delete a skill.
+     * </summary>
+     *
+     * @param Skill $skill Route-model bound skill
+     * @return JsonResponse HTTP 204 No Content
+     */
+    public function deleteSkill(Skill $skill): JsonResponse
+    {
+        // Act (Manager)
+        $this->skillManager->deleteSkill($skill);
+
+        // Return (Controller)
         return response()->json(null, 204);
     }
 }

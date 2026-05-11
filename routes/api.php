@@ -53,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
     Route::get('/users/{user}/stats', [UserController::class, 'getUserStats']);
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
-    Route::get('/users/{user}/skills', [UserController::class, 'getUserSkills']);
+    Route::get('/users/{user}/skills', [SkillController::class, 'getAgileSkillsForUser']);
     Route::post('/users/{user}/skills', [UserController::class, 'attachSkillToUser']);
     Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);
     Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkillFromUser']);
@@ -67,12 +67,21 @@ Route::middleware('auth:sanctum')->group(function () {
     // Simulations
     Route::apiResource('simulations', SimulationController::class)->except(['update']);
 
-    // Skills
-    Route::apiResource('skills', SkillController::class)->except(['show']);
+    /** ---------------------- [ SKILLS ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/skills', [SkillController::class, 'listSkills']);
+    Route::post('/skills', [SkillController::class, 'createSkill']);
+    Route::put('/skills/{skill}', [SkillController::class, 'updateSkill']);
+    Route::delete('/skills/{skill}', [SkillController::class, 'deleteSkill']);
 
-    // Skill Categories
-    Route::apiResource('skill-categories', SkillCategoryController::class)->except(['show']);
-    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'kci']);
+    /** ---------------------- [ SKILL CATEGORIES ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);
+    Route::post('/skill-categories', [SkillCategoryController::class, 'createCategory']);
+    Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteCategory']);
+
+    /* ----------------- SKILL-CATEGORY-RELATED ENDPOINTS ----------------- */
+    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
 
     // Departments
     Route::apiResource('departments', DepartmentController::class)->except(['show']);

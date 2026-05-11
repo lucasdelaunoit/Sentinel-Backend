@@ -118,26 +118,6 @@ class UserService
 
     /**
      * <summary>
-     *  Load and shape all skills attached to a user with their proficiency levels.
-     * </summary>
-     *
-     * @param User $user User model instance
-     * @return Collection Each item: id, name, category, level
-     */
-    public function getUserSkills(User $user): Collection
-    {
-        $user->loadMissing('skills.category');
-
-        return $user->skills->map(fn($skill) => [
-            'id'       => $skill->id,
-            'name'     => $skill->name,
-            'category' => $skill->category?->name,
-            'level'    => $skill->pivot->level,
-        ]);
-    }
-
-    /**
-     * <summary>
      *  Attach a skill to a user at a given proficiency level (idempotent).
      * </summary>
      *

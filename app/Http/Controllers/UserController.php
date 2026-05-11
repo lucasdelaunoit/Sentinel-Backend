@@ -93,19 +93,6 @@ class UserController extends Controller
 
     /**
      * <summary>
-     *  List all skills for a user with their proficiency levels.
-     * </summary>
-     *
-     * @param User $user Route-model bound user
-     * @return JsonResponse Collection of skills with id, name, category and level
-     */
-    public function getUserSkills(User $user): JsonResponse
-    {
-        return response()->json($this->userManager->getUserSkills($user));
-    }
-
-    /**
-     * <summary>
      *  Attach a skill to a user.
      * </summary>
      *
