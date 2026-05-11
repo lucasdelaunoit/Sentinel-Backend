@@ -7,6 +7,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Requests\UpdateUserSkillRequest;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\UserStatsResource;
 use App\Managers\UserManager;
 use App\Models\Skill;
 use App\Models\User;
@@ -180,13 +181,18 @@ class UserController extends Controller
 
     /**
      * <summary>
-     *  Get aggregate employee statistics for the dashboard.
+     *  Get stats for a specific user: criticality, bus factor in org, skill distribution, active projects.
      * </summary>
      *
-     * @return JsonResponse total_employees, critical_employees, skill_coverage, department_balance
+     * @param User $user Route-model bound user
+     * @return UserStatsResource criticality, bus_factor_in_org, skills, active_projects
      */
-    public function getUserStats(): JsonResponse
+    public function getUserStats(User $user): UserStatsResource
     {
-        return response()->json($this->userManager->getUserStats());
+        // Act (Manager)
+        $userStats = $this->userManager->getUserStats($user);
+
+        // Return (Controller)
+        return new UserStatsResource($userStats);
     }
 }

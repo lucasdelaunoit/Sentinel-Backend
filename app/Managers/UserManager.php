@@ -4,10 +4,8 @@ namespace App\Managers;
 
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
-use App\Models\Project;
 use App\Models\User;
 use App\Services\RiskCalculationService;
-use App\Services\SkillCoverageService;
 use App\Services\UserService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -19,7 +17,6 @@ class UserManager
 {
     public function __construct(
         private readonly RiskCalculationService $riskService,
-        private readonly SkillCoverageService   $coverageService,
         private readonly UserService            $userService,
     ) {}
 
@@ -185,91 +182,46 @@ class UserManager
 
     /**
      * <summary>
-     *  Assemble aggregate employee statistics for dashboard KPIs.
-     *  Orchestrates UserService (total, balance) and SkillCoverageService (critical, coverage).
+     *  Assemble per-user stats: criticality score, bus-factor exposure, skill distribution, active projects.
      * </summary>
      *
-     * @return array total_employees, critical_employees, skill_coverage, department_balance
+     * @param User $user Route-model bound user
+     * @return array criticality, bus_factor_in_org, skills, active_projects
      */
-    public function getUserStats(): array
+    public function getUserStats(User $user): array
     {
-        return [
-            'total_employees' => $this->userService->getTotalEmployeesStat(),
-            'critical_employees' => $this->criticalEmployeesStat(),
-            'skill_coverage' => $this->skillCoverageStat(),
-            'department_balance' => $this->userService->getDepartmentBalanceStat(),
-        ];
-    }
+        $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.leaves']);
 
-    private function criticalEmployeesStat(): array
-    {
-        $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
-            ->get();
+        $criticality = $this->riskService->computeUserCriticality($user);
+        $activeProjects = $user->projects->where('status', 'active');
 
-        $criticalIds = collect();
+        $busFactorProjects = $activeProjects->filter(
+            fn($p) => $this->riskService->computeBusFactor($p) <= 2
+        );
 
-        foreach ($projects as $project) {
-            foreach ($this->coverageService->getCoverage($project) as $skill) {
-                if ($skill['status'] === 'siloed' && !empty($skill['employees'])) {
-                    $criticalIds->push($skill['employees'][0]['user_id']);
-                }
-            }
-        }
-
-        $criticalIds = $criticalIds->unique();
-        $count = $criticalIds->count();
-        $total = User::count();
-        $pct = $total > 0 ? (int) round(($count / $total) * 100) : 0;
-
-        $severity = match (true) {
-            $count >= 5 => 'critical',
-            $count >= 2 => 'warning',
-            default => 'ok',
-        };
+        $byCategory = $user->skills
+            ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
+            ->map(fn($skills, $cat) => [
+                'category' => $cat,
+                'count' => $skills->count(),
+                'avg_level' => round($skills->avg(fn($s) => $s->pivot->level), 1),
+            ])
+            ->values();
 
         return [
-            'value' => $count,
-            'insight' => $count > 0
-                ? "High-impact staff ({$pct}% of team)"
-                : "No single-point-of-failure staff",
-            'severity' => $severity,
-        ];
-    }
-
-    private function skillCoverageStat(): array
-    {
-        $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
-            ->get();
-
-        $total = 0;
-        $covered = 0;
-
-        foreach ($projects as $project) {
-            foreach ($this->coverageService->getCoverage($project) as $skill) {
-                $total++;
-                if ($skill['status'] !== 'uncovered') {
-                    $covered++;
-                }
-            }
-        }
-
-        $pct       = $total > 0 ? (int) round(($covered / $total) * 100) : 100;
-        $uncovered = $total - $covered;
-
-        $severity = match (true) {
-            $pct < 70 => 'critical',
-            $pct < 85 => 'warning',
-            default => 'ok',
-        };
-
-        return [
-            'value' => $pct,
-            'insight' => $uncovered > 0
-                ? "{$uncovered} critical gap" . ($uncovered > 1 ? 's' : '')
-                : "All required skills covered",
-            'severity' => $severity,
+            'criticality' => $criticality,
+            'bus_factor_in_org' => [
+                'count' => $busFactorProjects->count(),
+                'projects' => $busFactorProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
+            ],
+            'skills' => [
+                'total' => $user->skills->count(),
+                'by_category' => $byCategory->all(),
+            ],
+            'active_projects' => [
+                'count' => $activeProjects->count(),
+                'projects' => $activeProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
+            ],
         ];
     }
 

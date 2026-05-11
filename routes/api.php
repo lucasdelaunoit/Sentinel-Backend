@@ -42,16 +42,16 @@ Route::middleware('auth:sanctum')->group(function () {
     /** ---------------------- [ USERS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
     Route::get('/users/today', [UserController::class, 'getUsersTodayStatus']);
-    Route::get('/users/stats', [UserController::class, 'getUserStats']);
 
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/users', [UserController::class, 'getAgileUsers']);
     Route::post('/users', [UserController::class, 'createUser']);
-    Route::get('/user/{user}', [UserController::class, 'getUser']);
+    Route::get('/users/{user}', [UserController::class, 'getUser']);
     Route::put('/users/{user}', [UserController::class, 'updateUser']);
     Route::delete('/users/{user}', [UserController::class, 'deleteUser']);
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
+    Route::get('/users/{user}/stats', [UserController::class, 'getUserStats']);
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
     Route::get('/users/{user}/skills', [UserController::class, 'getUserSkills']);
     Route::post('/users/{user}/skills', [UserController::class, 'attachSkillToUser']);
