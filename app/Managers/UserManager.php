@@ -52,19 +52,6 @@ class UserManager
 
     /**
      * <summary>
-     *  Retrieve a single user with all relations loaded.
-     * </summary>
-     *
-     * @param User $user Route-model bound user
-     * @return User User with department, skills (+ category), projects and leaves
-     */
-    public function getUser(User $user): User
-    {
-        return $this->userService->getUser($user);
-    }
-
-    /**
-     * <summary>
      *  Update fields on an existing user inside a transaction.
      * </summary>
      *

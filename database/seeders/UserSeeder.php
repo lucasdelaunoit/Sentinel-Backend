@@ -11,16 +11,17 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $users = [
-            ['name' => 'Clint', 'email' => 'clint@qite.be'],
-            ['name' => 'Lucas Delaunoit', 'email' => 'lucasdelaunoit@qite.be'],
+            ['firstname' => 'Clint',  'lastname' => '',          'email' => 'clint@qite.be'],
+            ['firstname' => 'Lucas',  'lastname' => 'Delaunoit', 'email' => 'lucasdelaunoit@qite.be'],
         ];
 
         foreach ($users as $data) {
             User::updateOrCreate(
                 ['email' => $data['email']],
                 [
-                    'name' => $data['name'],
-                    'password' => Hash::make('password'),
+                    'firstname' => $data['firstname'],
+                    'lastname'  => $data['lastname'],
+                    'password'  => Hash::make('password'),
                 ]
             );
         }

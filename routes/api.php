@@ -47,7 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/users', [UserController::class, 'getAgileUsers']);
     Route::post('/users', [UserController::class, 'createUser']);
-    Route::get('/users/{user}', [UserController::class, 'getUser']);
+    Route::get('/user/{user}', [UserController::class, 'getUser']);
     Route::put('/users/{user}', [UserController::class, 'updateUser']);
     Route::delete('/users/{user}', [UserController::class, 'deleteUser']);
 

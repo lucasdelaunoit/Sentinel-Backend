@@ -58,7 +58,7 @@ class UserController extends Controller
      */
     public function getUser(User $user): UserResource
     {
-        return UserResource::make($this->userManager->getUser($user));
+        return new UserResource($user);
     }
 
     /**

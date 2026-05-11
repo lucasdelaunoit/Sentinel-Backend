@@ -34,7 +34,8 @@ class UserService
             ->allowedFilters([
                 AllowedFilter::callback('search', function ($query, $value) {
                     $query->where(fn($q) => $q
-                        ->where('name', 'like', "%{$value}%")
+                        ->where('firstname', 'like', "%{$value}%")
+                        ->orWhere('lastname', 'like', "%{$value}%")
                         ->orWhere('email', 'like', "%{$value}%")
                     );
                 }),
@@ -59,7 +60,12 @@ class UserService
                 }),
             ])
             ->allowedSorts([
-                AllowedSort::field('name'),
+                AllowedSort::callback('name', function ($query, bool $descending) {
+                    $dir = $descending ? 'desc' : 'asc';
+                    $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
+                }),
+                AllowedSort::field('firstname'),
+                AllowedSort::field('lastname'),
                 AllowedSort::field('title'),
                 AllowedSort::field('created_at'),
             ])
@@ -79,24 +85,6 @@ class UserService
     public function createUser(array $data): User
     {
         return User::create($data);
-    }
-
-    /**
-     * <summary>
-     *  Load all relations for a single user.
-     * </summary>
-     *
-     * @param User $user User model instance
-     * @return User User with department, skills (+ category), projects and leaves
-     */
-    public function getUser(User $user): User
-    {
-        return $user->loadMissing([
-            'department',
-            'skills.category',
-            'projects',
-            'leaves',
-        ]);
     }
 
     /**
@@ -207,13 +195,13 @@ class UserService
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
             ])
-            ->orderBy('name')
+            ->orderBy('firstname')
             ->get()
             ->map(fn($user) => [
                 'id'           => $user->id,
-                'name'         => $user->name,
+                'name'         => $user->firstname . ' ' . $user->lastname,
                 'role'         => $user->title,
-                'initials'     => $this->deriveInitials($user->name),
+                'initials'     => $this->deriveInitials($user->firstname . ' ' . $user->lastname),
                 'today_status' => $this->resolveUserStatus($user)->value,
             ]);
     }

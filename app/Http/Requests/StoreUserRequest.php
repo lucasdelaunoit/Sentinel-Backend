@@ -9,9 +9,10 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'          => ['required', 'string', 'max:255'],
-            'email'         => ['required', 'email', 'unique:users,email'],
-            'title'         => ['nullable', 'string', 'max:255'],
+            'firstname' => ['required', 'string', 'max:255'],
+            'lastname' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'title' => ['nullable', 'string', 'max:255'],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
         ];
     }
