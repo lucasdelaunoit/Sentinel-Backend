@@ -7,6 +7,7 @@ use App\Models\SkillCategory;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillService;
+use Exception;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -41,19 +42,8 @@ class SkillManager
         $this->skillService->deleteSkill($skill);
     }
 
-    // Categories
 
-    public function listCategories(): Collection
-    {
-        return $this->skillService->listCategories();
-    }
 
-    public function createCategory(array $data): SkillCategory
-    {
-        abort_if(SkillCategory::count() >= 8, 422, 'Maximum of 8 skill categories allowed.');
-
-        return $this->skillService->createCategory($data);
-    }
 
     public function updateCategory(SkillCategory $category, array $data): SkillCategory
     {

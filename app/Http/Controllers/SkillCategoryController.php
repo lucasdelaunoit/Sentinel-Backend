@@ -42,8 +42,11 @@ class SkillCategoryController extends Controller
      */
     public function createCategory(StoreSkillCategoryRequest $request): JsonResponse
     {
+        // Validate (Controller)
+        $validatedRequest = $request->validated();
+
         // Act (Manager)
-        $category = $this->skillManager->createCategory($request->validated());
+        $category = $this->skillCategoryManager->createCategory($validatedRequest);
 
         // Return (Controller)
         return response()->json($category, 201);

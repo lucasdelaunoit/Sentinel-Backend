@@ -4,10 +4,12 @@ namespace App\Managers;
 
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Models\SkillCategory;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCategoryService;
 use App\Services\UserService;
+use Exception;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -33,17 +35,19 @@ class SkillCategoryManager
     }
 
     /**
-     * <summary>
-     *  Create a new user record inside a transaction.
-     * </summary>
+     * Create a new skill category inside a DB transaction.
      *
-     * @param array $data Validated fields: name, email, title, department_id
-     * @return User Newly created user
-     * @throws Throwable
+     * @param array $data Attributes for the new SkillCategory (e.g. ['name' => '...'])
+     * @return SkillCategory The created SkillCategory model
+     * @throws Exception If the maximum of 8 skill categories is exceeded.
+     * @throws Throwable If the database transaction fails.
      */
-    public function createUser(array $data): User
+    public function createCategory(array $data): SkillCategory
     {
-        return DB::transaction(fn() => $this->userService->createUser($data));
+        if (SkillCategory::count() >= 8)
+            throw new Exception('Maximum of 8 skill categories allowed.');
+
+        return DB::transaction(fn() => $this->skillCategoryService->createCategory($data));
     }
 
     /**

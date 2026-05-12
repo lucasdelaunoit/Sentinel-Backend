@@ -27,6 +27,12 @@ class SkillCategoryService
         return SkillCategory::withCount('skills')->orderBy('name')->get();
     }
 
+    /**
+     * Create a new skill category.
+     *
+     * @param array $data Attributes for the new SkillCategory (e.g. ['name' => '...'])
+     * @return SkillCategory The created SkillCategory model
+     */
     public function createCategory(array $data): SkillCategory
     {
         return SkillCategory::create($data);
