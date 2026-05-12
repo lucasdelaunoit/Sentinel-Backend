@@ -19,6 +19,22 @@ class SkillCategoryService
 
     /**
      * <summary>
+     *  Update a single SkillCategory row. Only the name field is mutable.
+     * </summary>
+     *
+     * @param SkillCategory $category Target category to update
+     * @param array{name: string} $data Validated payload — only the name is applied
+     * @return SkillCategory Freshly reloaded category
+     */
+    public function updateSkillCategory(SkillCategory $category, array $data): SkillCategory
+    {
+        $category->update(['name' => $data['name']]);
+
+        return $category->fresh();
+    }
+
+    /**
+     * <summary>
      *  Soft-delete a single SkillCategory row.
      * </summary>
      *

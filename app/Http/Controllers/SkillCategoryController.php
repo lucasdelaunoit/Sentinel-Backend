@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSkillCategoryRequest;
+use App\Http\Requests\UpdateSkillCategoryRequest;
 use App\Http\Resources\SkillCategoryResource;
 use App\Managers\SkillCategoryManager;
 use App\Models\SkillCategory;
@@ -46,6 +47,24 @@ class SkillCategoryController extends Controller
 
         // Return (Controller)
         return SkillCategoryResource::make($category)->response()->setStatusCode(201);
+    }
+
+    /**
+     * <summary>
+     *  Update a SkillCategory. Only the name is mutable.
+     * </summary>
+     *
+     * @param UpdateSkillCategoryRequest $request Validated payload — name (required, unique)
+     * @param SkillCategory $skillCategory Route-model bound category
+     * @return SkillCategoryResource Updated category
+     */
+    public function updateSkillCategory(UpdateSkillCategoryRequest $request, SkillCategory $skillCategory): SkillCategoryResource
+    {
+        // Act (Manager)
+        $category = $this->skillCategoryManager->updateSkillCategory($skillCategory, $request->validated());
+
+        // Return (Controller)
+        return SkillCategoryResource::make($category);
     }
 
     /**

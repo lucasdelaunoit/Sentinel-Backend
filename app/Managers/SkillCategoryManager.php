@@ -33,6 +33,20 @@ class SkillCategoryManager
 
     /**
      * <summary>
+     *  Update a SkillCategory. Only the name is mutable. Delegates to SkillCategoryService.
+     * </summary>
+     *
+     * @param SkillCategory $category Target category to update
+     * @param array{name: string} $data Validated payload — only the name is applied
+     * @return SkillCategory Updated category
+     */
+    public function updateSkillCategory(SkillCategory $category, array $data): SkillCategory
+    {
+        return $this->skillCategoryService->updateSkillCategory($category, $data);
+    }
+
+    /**
+     * <summary>
      *  Soft-delete a SkillCategory and cascade soft-delete to all its skills inside a transaction.
      * </summary>
      *
