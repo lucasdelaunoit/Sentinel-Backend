@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSkillRequest;
 use App\Http\Requests\UpdateSkillRequest;
+use App\Http\Resources\SkillResource;
 use App\Managers\SkillManager;
 use App\Models\Skill;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class SkillController extends Controller
 {
@@ -23,13 +25,30 @@ class SkillController extends Controller
      * </summary>
      *
      * @param Request $request Pagination, filter (search, category_id), sort parameters
-     * @param User    $user    Route-model bound user
+     * @param User $user Route-model bound user
      * @return LengthAwarePaginator Paginated skills with category
      */
     public function getAgileSkillsForUser(Request $request, User $user): LengthAwarePaginator
     {
         // Act (Manager)
         return $this->skillManager->getAgileSkillsForUser($request, $user);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve all skills (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return AnonymousResourceCollection Paginated list of skill
+     */
+    public function getAgileSkills(Request $request): AnonymousResourceCollection
+    {
+        // Act (Manager)
+        $skills = $this->skillManager->getAgileSkills($request);
+
+        // Return (Controller)
+        return SkillResource::collection($skills);
     }
 
     /**

@@ -17,8 +17,21 @@ class SkillManager
 {
     public function __construct(
         private readonly RiskCalculationService $riskService,
-        private readonly SkillService           $skillService,
+        private readonly SkillService $skillService,
     ) {}
+
+    /**
+     * <summary>
+     *  Retrieve all skills (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return LengthAwarePaginator Paginated list of skill
+     */
+    public function getAgileSkills(Request $request): LengthAwarePaginator
+    {
+        return $this->skillService->getAgileSkills($request);
+    }
 
     // Skills
 

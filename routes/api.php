@@ -69,7 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /** ---------------------- [ SKILLS ] ---------------------- */
     /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/skills', [SkillController::class, 'listSkills']);
+    Route::get('/skills', [SkillController::class, 'getAgileSkills']);
     Route::post('/skills', [SkillController::class, 'createSkill']);
     Route::put('/skills/{skill}', [SkillController::class, 'updateSkill']);
     Route::delete('/skills/{skill}', [SkillController::class, 'deleteSkill']);

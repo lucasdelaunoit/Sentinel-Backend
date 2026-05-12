@@ -15,6 +15,33 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class SkillService
 {
+    /**
+     * <summary>
+     *  Retrieve all skills (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @return LengthAwarePaginator Paginated list of skill
+     */
+    public function getAgileSkills(Request $request): LengthAwarePaginator
+    {
+        if ($request->filled('search') && !$request->has('filter.search')) {
+            $request->merge(['filter' => array_merge($request->input('filter', []), ['search' => $request->input('search')])]);
+        }
+
+        return QueryBuilder::for(Skill::class, $request)
+            ->with('category')
+            ->allowedFilters([
+                AllowedFilter::callback('search', function ($query, $value) {
+                    $query->where('name', 'like', "%{$value}%");
+                }),
+            ])
+            ->defaultSort('name')
+            ->paginate($request->integer('per_page', 20))
+            ->appends($request->query());
+    }
+
+
     public function listSkills(array $filters = []): Collection
     {
         return Skill::query()
