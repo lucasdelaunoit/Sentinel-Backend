@@ -46,7 +46,7 @@ class SkillCategoryController extends Controller
         $category = $this->skillCategoryManager->createCategory($request->validated());
 
         // Return (Controller)
-        return SkillCategoryResource::make($category)->response()->setStatusCode(201);
+        return new SkillCategoryResource($category);
     }
 
     /**
