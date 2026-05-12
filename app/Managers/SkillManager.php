@@ -9,6 +9,8 @@ use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class SkillManager
 {
@@ -39,23 +41,34 @@ class SkillManager
         return $this->skillService->updateSkill($skill, $data);
     }
 
+    /**
+     * <summary>
+     *  Soft-delete a Skill and cascade-detach it from all users and project requirements
+     *  inside a single transaction. Orchestrates SkillService — single-responsibility methods.
+     *  Affected project IDs are collected before the transaction for later recalculation.
+     * </summary>
+     *
+     * @param Skill $skill Target skill to soft-delete
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
     public function deleteSkill(Skill $skill): void
     {
-        $this->skillService->deleteSkill($skill);
+        $affectedProjectIds = $this->skillService->getProjectsForSkill($skill);
+
+        DB::transaction(function () use ($skill) {
+            $this->skillService->detachSkillFromAllUsers($skill);
+            $this->skillService->detachSkillFromAllProjects($skill);
+            $this->skillService->deleteSkill($skill);
+        });
+
+        // TODO: dispatch RecalculateProjectRiskJob for $affectedProjectIds
     }
-
-
-
 
     // User skills
 
     public function getAgileSkillsForUser(QueryParams $params, User $user): LengthAwarePaginator
     {
         return $this->skillService->getAgileSkillsForUser($params, $user);
-    }
-
-    public function getUserSkills(User $user): SupportCollection
-    {
-        return $this->skillService->getUserSkills($user);
     }
 }

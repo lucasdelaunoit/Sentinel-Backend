@@ -48,6 +48,14 @@ class SkillService
         return $skill->fresh(['category']);
     }
 
+    /**
+     * <summary>
+     *  Soft-delete a single Skill row. Does not touch related pivots.
+     * </summary>
+     *
+     * @param Skill $skill Target skill to soft-delete
+     * @return void
+     */
     public function deleteSkill(Skill $skill): void
     {
         $skill->delete();
@@ -55,8 +63,46 @@ class SkillService
 
     /**
      * <summary>
+     *  Return the IDs of every Project that requires the given Skill via project_skill_reqs.
+     * </summary>
+     *
+     * @param Skill $skill Target skill
+     * @return SupportCollection<int, int> Collection of project IDs
+     */
+    public function getProjectsForSkill(Skill $skill): SupportCollection
+    {
+        return $skill->projects()->pluck('projects.id');
+    }
+
+    /**
+     * <summary>
+     *  Detach the given Skill from every User by clearing its rows in the user_skills pivot.
+     * </summary>
+     *
+     * @param Skill $skill Target skill
+     * @return void
+     */
+    public function detachSkillFromAllUsers(Skill $skill): void
+    {
+        $skill->users()->detach();
+    }
+
+    /**
+     * <summary>
+     *  Detach the given Skill from every Project by clearing its rows in the project_skill_reqs pivot.
+     * </summary>
+     *
+     * @param Skill $skill Target skill
+     * @return void
+     */
+    public function detachSkillFromAllProjects(Skill $skill): void
+    {
+        $skill->projects()->detach();
+    }
+
+    /**
+     * <summary>
      *  Soft-delete every Skill that belongs to the given SkillCategory.
-     *  Single DB action — caller orchestrates any related deletions.
      * </summary>
      *
      * @param SkillCategory $category Category whose skills should be soft-deleted
