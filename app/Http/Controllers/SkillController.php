@@ -8,6 +8,7 @@ use App\Http\Resources\SkillResource;
 use App\Managers\SkillManager;
 use App\Models\Skill;
 use App\Models\User;
+use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,8 +31,11 @@ class SkillController extends Controller
      */
     public function getAgileSkillsForUser(Request $request, User $user): LengthAwarePaginator
     {
+        // Validate & authorize (Controller)
+        $queryParams = QueryParams::fromRequest($request);
+
         // Act (Manager)
-        return $this->skillManager->getAgileSkillsForUser($request, $user);
+        return $this->skillManager->getAgileSkillsForUser($queryParams, $user);
     }
 
     /**
@@ -44,8 +48,11 @@ class SkillController extends Controller
      */
     public function getAgileSkills(Request $request): AnonymousResourceCollection
     {
+        // Validate & authorize (Controller)
+        $queryParams = QueryParams::fromRequest($request);
+
         // Act (Manager)
-        $skills = $this->skillManager->getAgileSkills($request);
+        $skills = $this->skillManager->getAgileSkills($queryParams);
 
         // Return (Controller)
         return SkillResource::collection($skills);

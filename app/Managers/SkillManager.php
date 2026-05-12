@@ -7,9 +7,9 @@ use App\Models\SkillCategory;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillService;
+use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\Request;
 use Illuminate\Support\Collection as SupportCollection;
 
 class SkillManager
@@ -19,13 +19,17 @@ class SkillManager
         private readonly SkillService $skillService,
     ) {}
 
-    public function getAgileSkills(Request $request): LengthAwarePaginator
+    /**
+     * <summary>
+     *  Retrieve all skills (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @return LengthAwarePaginator Paginated list of skills
+     */
+    public function getAgileSkills(QueryParams $params): LengthAwarePaginator
     {
-        if ($request->filled('search') && !$request->has('filter.search')) {
-            $request->merge(['filter' => array_merge($request->input('filter', []), ['search' => $request->input('search')])]);
-        }
-
-        return $this->skillService->getAgileSkills($request);
+        return $this->skillService->getAgileSkills($params);
     }
 
     public function createSkill(array $data): Skill
@@ -69,13 +73,9 @@ class SkillManager
 
     // User skills
 
-    public function getAgileSkillsForUser(Request $request, User $user): LengthAwarePaginator
+    public function getAgileSkillsForUser(QueryParams $params, User $user): LengthAwarePaginator
     {
-        if ($request->filled('search') && !$request->has('filter.search')) {
-            $request->merge(['filter' => array_merge($request->input('filter', []), ['search' => $request->input('search')])]);
-        }
-
-        return $this->skillService->getAgileSkillsForUser($request, $user);
+        return $this->skillService->getAgileSkillsForUser($params, $user);
     }
 
     public function getUserSkills(User $user): SupportCollection
