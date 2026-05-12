@@ -53,23 +53,6 @@ class SkillController extends Controller
 
     /**
      * <summary>
-     *  Retrieve all skills (filterable by category and search term).
-     * </summary>
-     *
-     * @param Request $request Filter parameters: category_id, search
-     * @return JsonResponse Collection of skills with category
-     */
-    public function listSkills(Request $request): JsonResponse
-    {
-        // Act (Manager)
-        $skills = $this->skillManager->listSkills($request->only(['category_id', 'search']));
-
-        // Return (Controller)
-        return response()->json($skills);
-    }
-
-    /**
-     * <summary>
      *  Create a new skill.
      * </summary>
      *
