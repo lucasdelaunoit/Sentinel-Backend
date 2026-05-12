@@ -2,46 +2,27 @@
 
 namespace App\Managers;
 
-use App\Enums\UserStatus;
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\SkillCategory;
-use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCategoryService;
-use App\Services\UserService;
-use Exception;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use App\Services\SkillService;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SkillCategoryManager
 {
     public function __construct(
-        private readonly SkillCategoryService $skillCategoryService,
+        private readonly RiskCalculationService  $riskService,
+        private readonly SkillCategoryService    $skillCategoryService,
+        private readonly SkillService            $skillService,
     ) {}
 
-    /**
-     * <summary>
-     *  Retrieve all skill categories.
-     * </summary>
-     *
-     * @return Collection Collection of skill categories
-     */
     public function getAgileSkillCategories(): Collection
     {
         return $this->skillCategoryService->getAgileSkillCategories();
     }
 
-    /**
-     * Create a new skill category inside a DB transaction.
-     *
-     * @param array $data Attributes for the new SkillCategory (e.g. ['name' => '...'])
-     * @return SkillCategory The created SkillCategory model
-     * @throws Exception If the maximum of 8 skill categories is exceeded.
-     * @throws Throwable If the database transaction fails.
-     */
     public function createCategory(array $data): SkillCategory
     {
         if (SkillCategory::count() >= 8)
@@ -52,175 +33,27 @@ class SkillCategoryManager
 
     /**
      * <summary>
-     *  Update fields on an existing user inside a transaction.
+     *  Soft-delete a SkillCategory and cascade soft-delete to all its skills inside a transaction.
      * </summary>
      *
-     * @param User  $user Route-model bound user
-     * @param array $data Validated fields to update
-     * @return User Updated user with department relation
-     */
-    public function updateUser(User $user, array $data): User
-    {
-        return DB::transaction(fn() => $this->userService->updateUser($user, $data));
-    }
-
-    /**
-     * <summary>
-     *  Delete a user inside a transaction.
-     * </summary>
-     *
-     * @param User $user Route-model bound user
+     * @param SkillCategory $category Target category to soft-delete
      * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
-    public function deleteUser(User $user): void
+    public function deleteSkillCategory(SkillCategory $category): void
     {
-        DB::transaction(fn() => $this->userService->deleteUser($user));
+        DB::transaction(function () use ($category) {
+            $this->skillService->deleteSkillsBySkillCategory($category);
+            $this->skillCategoryService->deleteSkillCategory($category);
+        });
     }
 
-    /**
-     * <summary>
-     *  Attach a skill to a user inside a transaction, then trigger project risk recalculations.
-     * </summary>
-     *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
-     * @param int  $level   Proficiency level (1–5)
-     * @return void
-     */
-    public function attachSkillToUser(User $user, int $skillId, int $level): void
+    public function getKCI(SkillCategory $category): array
     {
-        DB::transaction(fn() => $this->userService->attachSkillToUser($user, $skillId, $level));
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    /**
-     * <summary>
-     *  Update the proficiency level of an attached skill inside a transaction, then trigger project risk recalculations.
-     * </summary>
-     *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
-     * @param int  $level   New proficiency level (1–5)
-     * @return void
-     */
-    public function updateUserSkill(User $user, int $skillId, int $level): void
-    {
-        DB::transaction(fn() => $this->userService->updateUserSkill($user, $skillId, $level));
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    /**
-     * <summary>
-     *  Detach a skill from a user inside a transaction, then trigger project risk recalculations.
-     * </summary>
-     *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
-     * @return void
-     */
-    public function detachSkillFromUser(User $user, int $skillId): void
-    {
-        DB::transaction(fn() => $this->userService->detachSkillFromUser($user, $skillId));
-
-        $this->dispatchProjectRecalculations($user);
-    }
-
-    /**
-     * <summary>
-     *  Compute the criticality score for a user across all active projects.
-     * </summary>
-     *
-     * @param User $user Route-model bound user
-     * @return array Criticality breakdown: silo_count, bus_factor_contributions, score
-     */
-    public function getUserCriticality(User $user): array
-    {
-        return $this->riskService->computeUserCriticality($user);
-    }
-
-    /**
-     * <summary>
-     *  Assemble today's team availability snapshot.
-     *  Delegates raw fetch to UserService, then computes capacity percentage and top-5 preview.
-     * </summary>
-     *
-     * @return array capacity_pct, total, employees (top-5 preview sorted by absence first)
-     */
-    public function getUsersTodayStatus(): array
-    {
-        $today = now()->toDateString();
-        $users = $this->userService->getTodayUsers($today);
-
-        $total = $users->count();
-        $availableCount = $users->where('today_status', UserStatus::Available->value)->count();
-        $capacityPct = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
-
-        $statusOrder = [UserStatus::Away->value => 0, UserStatus::Available->value => 1];
-        $preview = $users
-            ->sortBy(fn($u) => $statusOrder[$u['today_status']] ?? 99)
-            ->values()
-            ->take(5);
-
         return [
-            'capacity_pct' => $capacityPct,
-            'total' => $total,
-            'employees' => $preview->values()->all(),
+            'category_id'   => $category->id,
+            'category_name' => $category->name,
+            'kci'           => $this->riskService->computeKCI($category),
         ];
-    }
-
-    /**
-     * <summary>
-     *  Assemble per-user stats: criticality score, bus-factor exposure, skill distribution, active projects.
-     * </summary>
-     *
-     * @param User $user Route-model bound user
-     * @return array criticality, bus_factor_in_org, skills, active_projects
-     */
-    public function getUserStats(User $user): array
-    {
-        $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.leaves']);
-
-        $criticality = $this->riskService->computeUserCriticality($user);
-        $activeProjects = $user->projects->where('status', 'active');
-
-        $busFactorProjects = $activeProjects->filter(
-            fn($p) => $this->riskService->computeBusFactor($p) <= 2
-        );
-
-        $byCategory = $user->skills
-            ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
-            ->map(fn($skills, $cat) => [
-                'category' => $cat,
-                'count' => $skills->count(),
-                'avg_level' => round($skills->avg(fn($s) => $s->pivot->level), 1),
-            ])
-            ->values();
-
-        return [
-            'criticality' => $criticality,
-            'bus_factor_in_org' => [
-                'count' => $busFactorProjects->count(),
-                'projects' => $busFactorProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
-            ],
-            'skills' => [
-                'total' => $user->skills->count(),
-                'by_category' => $byCategory->all(),
-            ],
-            'active_projects' => [
-                'count' => $activeProjects->count(),
-                'projects' => $activeProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
-            ],
-        ];
-    }
-
-    private function dispatchProjectRecalculations(User $user): void
-    {
-        $user->loadMissing('projects');
-
-        foreach ($user->projects as $project) {
-            RecalculateProjectRiskJob::dispatch($project);
-        }
     }
 }

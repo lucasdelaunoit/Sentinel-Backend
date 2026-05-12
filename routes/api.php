@@ -78,7 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);
     Route::post('/skill-categories', [SkillCategoryController::class, 'createCategory']);
-    Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteCategory']);
+    Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteSkillCategory']);
 
     /* ----------------- SKILL-CATEGORY-RELATED ENDPOINTS ----------------- */
     Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);

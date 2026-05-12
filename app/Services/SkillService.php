@@ -7,7 +7,6 @@ use App\Models\SkillCategory;
 use App\Models\User;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -54,26 +53,18 @@ class SkillService
         $skill->delete();
     }
 
-    public function listCategories(): Collection
+    /**
+     * <summary>
+     *  Soft-delete every Skill that belongs to the given SkillCategory.
+     *  Single DB action — caller orchestrates any related deletions.
+     * </summary>
+     *
+     * @param SkillCategory $category Category whose skills should be soft-deleted
+     * @return void
+     */
+    public function deleteSkillsBySkillCategory(SkillCategory $category): void
     {
-        return SkillCategory::withCount('skills')->orderBy('name')->get();
-    }
-
-    public function createCategory(array $data): SkillCategory
-    {
-        return SkillCategory::create($data);
-    }
-
-    public function updateCategory(SkillCategory $category, array $data): SkillCategory
-    {
-        $category->update($data);
-
-        return $category->fresh();
-    }
-
-    public function deleteCategory(SkillCategory $category): void
-    {
-        $category->delete();
+        $category->skills()->delete();
     }
 
     public function getAgileSkillsForUser(QueryParams $params, User $user): LengthAwarePaginator

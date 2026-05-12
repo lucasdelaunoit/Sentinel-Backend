@@ -3,9 +3,7 @@
 namespace App\Managers;
 
 use App\Models\Skill;
-use App\Models\SkillCategory;
 use App\Models\User;
-use App\Services\RiskCalculationService;
 use App\Services\SkillService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -15,7 +13,6 @@ use Illuminate\Support\Collection as SupportCollection;
 class SkillManager
 {
     public function __construct(
-        private readonly RiskCalculationService $riskService,
         private readonly SkillService $skillService,
     ) {}
 
@@ -49,27 +46,6 @@ class SkillManager
 
 
 
-
-    public function updateCategory(SkillCategory $category, array $data): SkillCategory
-    {
-        return $this->skillService->updateCategory($category, $data);
-    }
-
-    public function deleteCategory(SkillCategory $category): void
-    {
-        abort_if($category->skills()->exists(), 409, 'Cannot delete a category that has skills assigned to it.');
-
-        $this->skillService->deleteCategory($category);
-    }
-
-    public function getKCI(SkillCategory $category): array
-    {
-        return [
-            'category_id'   => $category->id,
-            'category_name' => $category->name,
-            'kci'           => $this->riskService->computeKCI($category),
-        ];
-    }
 
     // User skills
 
