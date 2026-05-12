@@ -41,6 +41,15 @@ class SkillService
         return Skill::create($data);
     }
 
+    /**
+     * <summary>
+     *  Update a Skill row with the given payload and return the refreshed model with its category.
+     * </summary>
+     *
+     * @param Skill $skill Target skill
+     * @param array<string, mixed> $data Validated fields to update (name?, skill_category_id?)
+     * @return Skill Refreshed skill with category eager-loaded
+     */
     public function updateSkill(Skill $skill, array $data): Skill
     {
         $skill->update($data);

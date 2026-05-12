@@ -36,8 +36,18 @@ class SkillManager
         return $this->skillService->createSkill($data);
     }
 
+    /**
+     * <summary>
+     *  Update a Skill (name and/or skill_category_id) and return the fresh model with its category.
+     * </summary>
+     *
+     * @param Skill $skill Target skill
+     * @param array<string, mixed> $data Validated payload (name?, skill_category_id?)
+     * @return Skill Updated skill with category eager-loaded
+     */
     public function updateSkill(Skill $skill, array $data): Skill
     {
+        // TODO: when skill_category_id changes, dispatch KCI recalculation for old + new categories
         return $this->skillService->updateSkill($skill, $data);
     }
 
@@ -54,15 +64,13 @@ class SkillManager
      */
     public function deleteSkill(Skill $skill): void
     {
-        $affectedProjectIds = $this->skillService->getProjectsForSkill($skill);
-
+        // TODO: dispatch RecalculateProjectRiskJob for $this->skillService->getProjectsForSkill($skill)
+        //       before the transaction so affected projects are known
         DB::transaction(function () use ($skill) {
             $this->skillService->detachSkillFromAllUsers($skill);
             $this->skillService->detachSkillFromAllProjects($skill);
             $this->skillService->deleteSkill($skill);
         });
-
-        // TODO: dispatch RecalculateProjectRiskJob for $affectedProjectIds
     }
 
     // User skills

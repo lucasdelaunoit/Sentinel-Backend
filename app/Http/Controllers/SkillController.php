@@ -81,16 +81,16 @@ class SkillController extends Controller
      * </summary>
      *
      * @param UpdateSkillRequest $request Fields to update (all optional)
-     * @param Skill              $skill   Route-model bound skill
-     * @return JsonResponse Updated skill
+     * @param Skill $skill Route-model bound skill
+     * @return SkillResource Updated skill with category
      */
-    public function updateSkill(UpdateSkillRequest $request, Skill $skill): JsonResponse
+    public function updateSkill(UpdateSkillRequest $request, Skill $skill): SkillResource
     {
         // Act (Manager)
         $skill = $this->skillManager->updateSkill($skill, $request->validated());
 
         // Return (Controller)
-        return response()->json($skill);
+        return SkillResource::make($skill);
     }
 
     /**
