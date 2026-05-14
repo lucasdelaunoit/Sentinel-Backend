@@ -13,6 +13,46 @@ class ProjectService
 {
     /**
      * <summary>
+     *  Aggregate project-wide stats for the Projects page header.
+     *  Scope: non-archived projects only (managers do not care about archived projects in the header).
+     *
+     *  Bands (per product spec):
+     *    - 0–39  → Healthy
+     *    - 40–69 → At Risk (Moderate / Warning)
+     *    - 70+   → Fragile
+     *
+     *  TODO(fragility): real Fragility score is not implemented yet. Spec:
+     *    Fragility = 0.40 * BusFactorRisk + 0.35 * CoverageRisk + 0.25 * DependencyRisk
+     *    Health    = 100 - Fragility
+     *  When the FragilityService lands, swap `risk_score` / `health` reads below for the new
+     *  precomputed columns (e.g. `fragility`) populated by RecalculateProjectRiskJob.
+     *
+     *  TODO(compute mode): currently reads precomputed columns (`risk_score`, `health`). Decide later
+     *  whether stats should be computed live in the Service vs. aggregated from columns updated by
+     *  the recalculation job. Live = always fresh but slower; precomputed = fast but depends on jobs.
+     * </summary>
+     *
+     * @return array total, avg_health, fragile, at_risk
+     */
+    public function getProjectStats(): array
+    {
+        $base = Project::query()->whereNull('archived_at');
+
+        $total = (clone $base)->count();
+        $avgHealth = (int) round((clone $base)->avg('health') ?? 0);
+        $fragile = (clone $base)->where('risk_score', '>=', 70)->count();
+        $atRisk = (clone $base)->whereBetween('risk_score', [40, 69])->count();
+
+        return [
+            'total' => $total,
+            'avg_health' => $avgHealth,
+            'fragile' => $fragile,
+            'at_risk' => $atRisk,
+        ];
+    }
+
+    /**
+     * <summary>
      *  Retrieve all projects (paginated, filterable, sortable) with user count.
      * </summary>
      *

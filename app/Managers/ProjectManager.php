@@ -22,6 +22,18 @@ class ProjectManager
 
     /**
      * <summary>
+     *  Aggregate project-wide stats for the Projects page header: total, avg_health, fragile, at_risk.
+     * </summary>
+     *
+     * @return array total, avg_health, fragile, at_risk
+     */
+    public function getProjectStats(): array
+    {
+        return $this->projectService->getProjectStats();
+    }
+
+    /**
+     * <summary>
      *  Retrieve all projects (paginated, filterable, sortable).
      * </summary>
      *

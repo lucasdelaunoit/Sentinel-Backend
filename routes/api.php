@@ -31,6 +31,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats/absence-impact', [DashboardController::class, 'absenceImpactDetail']);
 
     /** ---------------------- [ PROJECTS ] ---------------------- */
+    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/projects/stats', [ProjectController::class, 'getProjectStats']);
+
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/projects', [ProjectController::class, 'getAgileProjects']);
     Route::post('/projects', [ProjectController::class, 'createProject']);

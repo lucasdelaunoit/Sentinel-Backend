@@ -7,6 +7,7 @@ use App\Http\Requests\AttachUserToProjectRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
+use App\Http\Resources\ProjectStatsResource;
 use App\Managers\ProjectManager;
 use App\Models\Project;
 use App\Models\Skill;
@@ -21,6 +22,22 @@ class ProjectController extends Controller
     public function __construct(
         private readonly ProjectManager $projectManager,
     ) {}
+
+    /**
+     * <summary>
+     *  Aggregate project-wide stats: total, avg_health, fragile count, at_risk count.
+     * </summary>
+     *
+     * @return ProjectStatsResource total, avg_health, fragile, at_risk
+     */
+    public function getProjectStats(): ProjectStatsResource
+    {
+        // Act (Manager)
+        $stats = $this->projectManager->getProjectStats();
+
+        // Return (Controller)
+        return new ProjectStatsResource($stats);
+    }
 
     /**
      * <summary>
