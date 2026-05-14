@@ -12,14 +12,21 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->string('status')->default('active');
-            $table->unsignedTinyInteger('progress')->default(0);
+
+            // Cached metrics — populated by RecalculateProjectRiskJob
             $table->unsignedTinyInteger('risk_score')->default(0);
             $table->unsignedSmallInteger('bus_factor')->default(0);
             $table->unsignedTinyInteger('health')->default(100);
+
+            // Lifecycle timestamps — status is derived from these
             $table->date('started_at')->nullable();
-            $table->date('ended_at')->nullable();
+            $table->date('deadline')->nullable();
+            $table->timestamp('paused_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamp('archived_at')->nullable();
+
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

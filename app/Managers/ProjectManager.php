@@ -76,13 +76,7 @@ class ProjectManager
      */
     public function updateProject(Project $project, array $data): Project
     {
-        $project = DB::transaction(fn() => $this->projectService->updateProject($project, $data));
-
-        if (array_intersect(array_keys($data), ['status', 'progress'])) {
-            RecalculateProjectRiskJob::dispatch($project);
-        }
-
-        return $project;
+        return DB::transaction(fn() => $this->projectService->updateProject($project, $data));
     }
 
     /**
@@ -197,5 +191,89 @@ class ProjectManager
         DB::transaction(fn() => $this->projectService->detachSkillFromProject($project, $skillId));
 
         RecalculateProjectRiskJob::dispatch($project);
+    }
+
+    /**
+     * <summary>
+     *  Pause a project inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function pauseProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->pauseProject($project));
+    }
+
+    /**
+     * <summary>
+     *  Resume a paused project inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function resumeProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->resumeProject($project));
+    }
+
+    /**
+     * <summary>
+     *  Mark a project completed inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function completeProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->completeProject($project));
+    }
+
+    /**
+     * <summary>
+     *  Reopen a completed project inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function reopenProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->reopenProject($project));
+    }
+
+    /**
+     * <summary>
+     *  Archive a project inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function archiveProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->archiveProject($project));
+    }
+
+    /**
+     * <summary>
+     *  Unarchive a project inside a transaction. No risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function unarchiveProject(Project $project): Project
+    {
+        return DB::transaction(fn() => $this->projectService->unarchiveProject($project));
     }
 }

@@ -11,8 +11,11 @@ class ProjectFactory extends Factory
 
     public function definition(): array
     {
+        $startedAt = fake()->dateTimeBetween('-6 months', 'now');
+        $deadline  = fake()->dateTimeBetween($startedAt, '+6 months');
+
         return [
-            'name' => fake()->randomElement([
+            'name'         => fake()->randomElement([
                 'API Platform Modernization',
                 'Customer Portal v2',
                 'Data Pipeline Optimization',
@@ -24,14 +27,37 @@ class ProjectFactory extends Factory
                 'Real-time Notification Service',
                 'Legacy System Replacement',
             ]),
-            'description' => fake()->sentence(),
-            'status' => fake()->randomElement(['active', 'active', 'active', 'on_hold', 'completed']),
-            'progress' => fake()->numberBetween(0, 100),
-            'risk_score' => 0,
-            'bus_factor' => 0,
-            'health' => 100,
-            'started_at' => fake()->dateTimeBetween('-6 months', 'now'),
-            'ended_at' => fake()->optional()->dateTimeBetween('now', '+6 months'),
+            'description'  => fake()->sentence(),
+            'risk_score'   => 0,
+            'bus_factor'   => 0,
+            'health'       => 100,
+            'started_at'   => $startedAt,
+            'deadline'     => $deadline,
+            'paused_at'    => null,
+            'completed_at' => null,
+            'archived_at'  => null,
         ];
+    }
+
+    public function planned(): self
+    {
+        return $this->state(fn() => [
+            'started_at' => fake()->dateTimeBetween('+1 day', '+2 months'),
+        ]);
+    }
+
+    public function paused(): self
+    {
+        return $this->state(fn() => ['paused_at' => now()]);
+    }
+
+    public function completed(): self
+    {
+        return $this->state(fn() => ['completed_at' => now()]);
+    }
+
+    public function archived(): self
+    {
+        return $this->state(fn() => ['archived_at' => now()]);
     }
 }

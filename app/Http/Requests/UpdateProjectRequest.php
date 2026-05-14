@@ -11,10 +11,8 @@ class UpdateProjectRequest extends FormRequest
         return [
             'name'        => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'status'      => ['sometimes', 'in:active,paused,completed,archived'],
-            'progress'    => ['sometimes', 'integer', 'min:0', 'max:100'],
             'started_at'  => ['nullable', 'date'],
-            'ended_at'    => ['nullable', 'date', 'after_or_equal:started_at'],
+            'deadline'    => ['nullable', 'date', 'after_or_equal:started_at'],
         ];
     }
 }

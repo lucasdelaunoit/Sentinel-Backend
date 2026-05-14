@@ -157,4 +157,97 @@ class ProjectService
     {
         $project->skillRequirements()->detach($skillId);
     }
+
+    /**
+     * <summary>
+     *  Mark project as paused by setting paused_at to now.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function pauseProject(Project $project): Project
+    {
+        $project->update(['paused_at' => now()]);
+
+        return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Resume a paused project by clearing paused_at.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function resumeProject(Project $project): Project
+    {
+        $project->update(['paused_at' => null]);
+
+        return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Mark project as completed (sets completed_at, clears paused_at).
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function completeProject(Project $project): Project
+    {
+        $project->update([
+            'completed_at' => now(),
+            'paused_at'    => null,
+        ]);
+
+        return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Reopen a completed project by clearing completed_at.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function reopenProject(Project $project): Project
+    {
+        $project->update(['completed_at' => null]);
+
+        return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Archive a project by setting archived_at to now.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function archiveProject(Project $project): Project
+    {
+        $project->update(['archived_at' => now()]);
+
+        return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Unarchive a project by clearing archived_at.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Refreshed project
+     */
+    public function unarchiveProject(Project $project): Project
+    {
+        $project->update(['archived_at' => null]);
+
+        return $project->fresh();
+    }
 }

@@ -217,4 +217,106 @@ class ProjectController extends Controller
         // Return (Controller)
         return response()->json(null, 204);
     }
+
+    /**
+     * <summary>
+     *  Pause a project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function pauseProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->pauseProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
+
+    /**
+     * <summary>
+     *  Resume a paused project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function resumeProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->resumeProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
+
+    /**
+     * <summary>
+     *  Mark a project completed.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function completeProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->completeProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
+
+    /**
+     * <summary>
+     *  Reopen a completed project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function reopenProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->reopenProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
+
+    /**
+     * <summary>
+     *  Archive a project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function archiveProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->archiveProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
+
+    /**
+     * <summary>
+     *  Unarchive a project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectResource Refreshed project
+     */
+    public function unarchiveProject(Project $project): ProjectResource
+    {
+        // Act (Manager)
+        $project = $this->projectManager->unarchiveProject($project);
+
+        // Return (Controller)
+        return ProjectResource::make($project);
+    }
 }

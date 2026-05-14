@@ -38,6 +38,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/projects/{project}', [ProjectController::class, 'updateProject']);
     Route::delete('/projects/{project}', [ProjectController::class, 'deleteProject']);
 
+    /* ----------------- LIFECYCLE ACTIONS ----------------- */
+    Route::post('/projects/{project}/pause', [ProjectController::class, 'pauseProject']);
+    Route::post('/projects/{project}/resume', [ProjectController::class, 'resumeProject']);
+    Route::post('/projects/{project}/complete', [ProjectController::class, 'completeProject']);
+    Route::post('/projects/{project}/reopen', [ProjectController::class, 'reopenProject']);
+    Route::post('/projects/{project}/archive', [ProjectController::class, 'archiveProject']);
+    Route::post('/projects/{project}/unarchive', [ProjectController::class, 'unarchiveProject']);
+
     /* ----------------- PROJECT-RELATED ENDPOINTS ----------------- */
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);

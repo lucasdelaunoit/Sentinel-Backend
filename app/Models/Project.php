@@ -2,33 +2,59 @@
 
 namespace App\Models;
 
+use App\Enums\ProjectStatus;
 use Database\Factories\ProjectFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Project extends Model
 {
     /** @use HasFactory<ProjectFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
         'description',
-        'status',
-        'progress',
         'risk_score',
         'bus_factor',
         'health',
         'started_at',
-        'ended_at',
+        'deadline',
+        'paused_at',
+        'completed_at',
+        'archived_at',
     ];
 
     protected $casts = [
         'started_at' => 'date',
-        'ended_at'   => 'date',
+        'deadline' => 'date',
+        'paused_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
+
+    protected $appends = ['status'];
+
+    /**
+     * <summary>
+     *  Derived lifecycle status. Read-only — mutate by setting the underlying timestamp columns
+     *  (paused_at / completed_at / archived_at) or started_at via the dedicated action endpoints.
+     * </summary>
+     */
+    protected function status(): Attribute
+    {
+        return Attribute::get(function (): ProjectStatus {
+            if ($this->archived_at !== null)  return ProjectStatus::Archived;
+            if ($this->completed_at !== null) return ProjectStatus::Completed;
+            if ($this->paused_at !== null) return ProjectStatus::Paused;
+            if ($this->started_at !== null && $this->started_at->isPast()) return ProjectStatus::Active;
+            return ProjectStatus::Planned;
+        });
+    }
 
     public function users(): BelongsToMany
     {
