@@ -2,13 +2,13 @@
 
 namespace Database\Factories;
 
-use App\Models\Leave;
+use App\Models\Absence;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-class LeaveFactory extends Factory
+class AbsenceFactory extends Factory
 {
-    protected $model = Leave::class;
+    protected $model = Absence::class;
 
     public function definition(): array
     {

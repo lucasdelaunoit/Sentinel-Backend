@@ -176,7 +176,7 @@ class UserManager
      */
     public function getUserStats(User $user): array
     {
-        $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.leaves']);
+        $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences']);
 
         $criticality = $this->riskService->computeUserCriticality($user);
         $activeProjects = $user->projects->where('status', 'active');

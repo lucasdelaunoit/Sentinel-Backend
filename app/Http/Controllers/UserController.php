@@ -55,7 +55,7 @@ class UserController extends Controller
      * </summary>
      *
      * @param User $user Route-model bound user
-     * @return UserResource User with department, skills, projects and leaves
+     * @return UserResource User with department, skills, projects and absences
      */
     public function getUser(User $user): UserResource
     {

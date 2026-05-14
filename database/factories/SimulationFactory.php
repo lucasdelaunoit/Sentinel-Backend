@@ -16,7 +16,7 @@ class SimulationFactory extends Factory
             'project_id' => Project::factory(),
             'name' => fake()->randomElement([
                 'Holiday Season Simulation',
-                'Sick Leave Wave',
+                'Sick Absence Wave',
                 'Team Member Departure',
                 'Conference Week',
                 'End of Quarter Rush',

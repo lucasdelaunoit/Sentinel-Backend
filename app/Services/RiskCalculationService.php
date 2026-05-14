@@ -126,12 +126,13 @@ class RiskCalculationService
     {
         $today = Carbon::today();
 
-        $project->loadMissing('users.leaves');
+        // TODO: extract "active-today absence" predicate to AbsenceService for reuse.
+        $project->loadMissing('users.absences');
 
         $absentIds = $project->users
-            ->filter(fn($u) => $u->leaves->contains(
-                fn($l) => Carbon::parse($l->start_date)->lte($today)
-                    && Carbon::parse($l->end_date)->gte($today)
+            ->filter(fn($u) => $u->absences->contains(
+                fn($a) => Carbon::parse($a->start_date)->lte($today)
+                    && Carbon::parse($a->end_date)->gte($today)
             ))
             ->pluck('id')
             ->all();

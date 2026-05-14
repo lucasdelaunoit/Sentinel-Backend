@@ -47,15 +47,15 @@ class UserService
                     $status = UserStatus::tryFrom($value);
                     if ($status === null) return;
 
-                    $today    = now()->toDateString();
-                    $hasLeave = fn($q) => $q
+                    $today      = now()->toDateString();
+                    $hasAbsence = fn($q) => $q
                         ->where('start_date', '<=', $today)
                         ->where('end_date', '>=', $today);
 
                     if ($status === UserStatus::Away) {
-                        $query->whereHas('leaves', $hasLeave);
+                        $query->whereHas('absences', $hasAbsence);
                     } else {
-                        $query->whereDoesntHave('leaves', $hasLeave);
+                        $query->whereDoesntHave('absences', $hasAbsence);
                     }
                 }),
             ])
@@ -162,7 +162,7 @@ class UserService
 
     /**
      * <summary>
-     *  Fetch all users with their active-today leaves, mapped to status rows.
+     *  Fetch all users with their active-today absences, mapped to status rows.
      * </summary>
      *
      * @param string $today Date string (Y-m-d)
@@ -171,7 +171,7 @@ class UserService
     public function getTodayUsers(string $today): Collection
     {
         return User::query()
-            ->with(['leaves' => fn($q) => $q
+            ->with(['absences' => fn($q) => $q
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
             ])
@@ -246,7 +246,7 @@ class UserService
 
     private function resolveUserStatus(User $user): UserStatus
     {
-        return $user->leaves->isNotEmpty() ? UserStatus::Away : UserStatus::Available;
+        return $user->absences->isNotEmpty() ? UserStatus::Away : UserStatus::Available;
     }
 
     private function deriveInitials(string $name): string

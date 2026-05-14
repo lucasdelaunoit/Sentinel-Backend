@@ -27,10 +27,11 @@ class SkillCoverageService
 
     private function buildCoverage(Project $project, array $excludedIds): array
     {
+        // TODO: refactor coverage computation — extract "active-today absence" predicate to AbsenceService.
         $project->loadMissing([
             'skillRequirements',
             'users.skills',
-            'users.leaves',
+            'users.absences',
         ]);
 
         $today = Carbon::today();
@@ -38,9 +39,9 @@ class SkillCoverageService
         $absentIds = array_unique(array_merge(
             $excludedIds,
             $project->users
-                ->filter(fn(User $u) => $u->leaves->contains(
-                    fn($l) => Carbon::parse($l->start_date)->lte($today)
-                        && Carbon::parse($l->end_date)->gte($today)
+                ->filter(fn(User $u) => $u->absences->contains(
+                    fn($a) => Carbon::parse($a->start_date)->lte($today)
+                        && Carbon::parse($a->end_date)->gte($today)
                 ))
                 ->pluck('id')
                 ->all()

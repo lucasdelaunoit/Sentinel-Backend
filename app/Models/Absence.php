@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
-use Database\Factories\LeaveFactory;
+use Database\Factories\AbsenceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Leave extends Model
+class Absence extends Model
 {
-    /** @use HasFactory<LeaveFactory> */
-    use HasFactory;
+    /** @use HasFactory<AbsenceFactory> */
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',

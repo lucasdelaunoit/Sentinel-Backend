@@ -44,12 +44,12 @@ class User extends Authenticatable
     public function getStatusAttribute(): UserStatus
     {
         $today = now()->toDateString();
-        $onLeave = $this->leaves()
+        $isAbsent = $this->absences()
             ->where('start_date', '<=', $today)
             ->where('end_date', '>=', $today)
             ->exists();
 
-        return $onLeave ? UserStatus::Away : UserStatus::Available;
+        return $isAbsent ? UserStatus::Away : UserStatus::Available;
     }
 
     public function department(): BelongsTo
@@ -70,14 +70,14 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
-    public function leaves(): HasMany
+    public function absences(): HasMany
     {
-        return $this->hasMany(Leave::class);
+        return $this->hasMany(Absence::class);
     }
 
     public function simulations(): BelongsToMany
     {
-        return $this->belongsToMany(Simulation::class, 'simulation_leaves')
+        return $this->belongsToMany(Simulation::class, 'simulation_absences')
             ->withTimestamps();
     }
 }

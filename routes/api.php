@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Controllers\AbsenceController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
-use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SkillCategoryController;
@@ -58,11 +58,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);
     Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkillFromUser']);
 
-    // Leaves (scoped under user for create/list, standalone for edit/delete)
-    Route::get('/users/{user}/leaves', [LeaveController::class, 'index']);
-    Route::post('/users/{user}/leaves', [LeaveController::class, 'store']);
-    Route::put('/leaves/{leave}', [LeaveController::class, 'update']);
-    Route::delete('/leaves/{leave}', [LeaveController::class, 'destroy']);
+    /** ---------------------- [ ABSENCES ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::put('/absences/{absence}', [AbsenceController::class, 'updateAbsence']);
+    Route::delete('/absences/{absence}', [AbsenceController::class, 'deleteAbsence']);
+
+    /* ----------------- USER-RELATED ENDPOINTS ----------------- */
+    Route::get('/users/{user}/absences', [AbsenceController::class, 'getAgileAbsencesForUser']);
+    Route::post('/users/{user}/absences', [AbsenceController::class, 'createAbsenceForUser']);
 
     // Simulations
     Route::apiResource('simulations', SimulationController::class)->except(['update']);

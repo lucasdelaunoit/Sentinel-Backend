@@ -31,7 +31,7 @@ class Simulation extends Model
 
     public function absentUsers(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'simulation_leaves')
+        return $this->belongsToMany(User::class, 'simulation_absences')
             ->withTimestamps();
     }
 }

@@ -8,19 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('leaves', function (Blueprint $table) {
+        Schema::create('simulation_absences', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('simulation_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->date('start_date');
-            $table->date('end_date');
-            $table->string('type')->default('vacation'); // vacation, sick, other
-            $table->text('reason')->nullable();
             $table->timestamps();
+
+            $table->unique(['simulation_id', 'user_id']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('leaves');
+        Schema::dropIfExists('simulation_absences');
     }
 };

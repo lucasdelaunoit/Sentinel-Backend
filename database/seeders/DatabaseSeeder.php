@@ -17,7 +17,7 @@ class DatabaseSeeder extends Seeder
             ProjectSeeder::class,
             EmployeeSkillSeeder::class,
             ProjectSkillReqSeeder::class,
-            LeaveSeeder::class,
+            AbsenceSeeder::class,
         ]);
     }
 }

@@ -32,7 +32,7 @@ class DashboardManager
     {
         $projects = Project::where('status', 'active')
             ->where('risk_score', '>', 50)
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->orderByDesc('risk_score')
             ->get();
 
@@ -69,7 +69,7 @@ class DashboardManager
     public function getKnowledgeCoverageDetail(): array
     {
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements.category', 'users.skills', 'users.leaves'])
+            ->with(['skillRequirements.category', 'users.skills', 'users.absences'])
             ->get();
 
         $byCategory = [];
@@ -139,11 +139,11 @@ class DashboardManager
     public function getTeamAvailabilityDetail(): array
     {
         $today  = Carbon::today();
-        $absent = User::with(['leaves', 'skills.category', 'projects'])
+        $absent = User::with(['absences', 'skills.category', 'projects'])
             ->get()
-            ->filter(fn($u) => $u->leaves->some(
-                fn($l) => Carbon::parse($l->start_date)->lte($today)
-                    && Carbon::parse($l->end_date)->gte($today)
+            ->filter(fn($u) => $u->absences->some(
+                fn($a) => Carbon::parse($a->start_date)->lte($today)
+                    && Carbon::parse($a->end_date)->gte($today)
             ));
 
         $absentDetail = $absent->map(function ($user) {
@@ -174,7 +174,7 @@ class DashboardManager
         if (!empty($absentIds)) {
             $activeProjects = Project::where('status', 'active')
                 ->whereHas('users', fn($q) => $q->whereIn('users.id', $absentIds))
-                ->with(['skillRequirements', 'users.skills', 'users.leaves'])
+                ->with(['skillRequirements', 'users.skills', 'users.absences'])
                 ->get();
 
             foreach ($activeProjects as $project) {
@@ -209,7 +209,7 @@ class DashboardManager
     public function getAbsenceImpactDetail(): array
     {
         $today     = Carbon::today();
-        $absentIds = User::whereHas('leaves', fn($q) =>
+        $absentIds = User::whereHas('absences', fn($q) =>
             $q->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)
         )->pluck('id')->all();
 
@@ -218,7 +218,7 @@ class DashboardManager
         }
 
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 
         $uncoveredSkills = [];
@@ -265,7 +265,7 @@ class DashboardManager
     private function knowledgeCoverageStats(): array
     {
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 
         $total        = 0;
@@ -299,7 +299,7 @@ class DashboardManager
         $today = Carbon::today();
         $total = User::count();
 
-        $absentIds = User::whereHas('leaves', fn($q) =>
+        $absentIds = User::whereHas('absences', fn($q) =>
             $q->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)
         )->pluck('id');
 
@@ -334,7 +334,7 @@ class DashboardManager
     private function absenceImpactStats(): array
     {
         $today     = Carbon::today();
-        $absentIds = User::whereHas('leaves', fn($q) =>
+        $absentIds = User::whereHas('absences', fn($q) =>
             $q->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)
         )->pluck('id')->all();
 
@@ -343,7 +343,7 @@ class DashboardManager
         }
 
         $projects = Project::where('status', 'active')
-            ->with(['skillRequirements', 'users.skills', 'users.leaves'])
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 
         $count = 0;

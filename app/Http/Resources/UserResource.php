@@ -21,7 +21,7 @@ class UserResource extends JsonResource
             'department' => $this->whenLoaded('department'),
             'skills' => $this->whenLoaded('skills'),
             'projects' => $this->whenLoaded('projects'),
-            'leaves' => $this->whenLoaded('leaves'),
+            'absences' => $this->whenLoaded('absences'),
             'created_at' => $this->created_at,
         ];
     }
