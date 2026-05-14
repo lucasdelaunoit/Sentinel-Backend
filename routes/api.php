@@ -30,14 +30,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats/team-availability', [DashboardController::class, 'teamAvailabilityDetail']);
     Route::get('/dashboard/stats/absence-impact', [DashboardController::class, 'absenceImpactDetail']);
 
-    // Projects
-    Route::apiResource('projects', ProjectController::class);
-    Route::get('/projects/{project}/coverage', [ProjectController::class, 'coverage']);
-    Route::get('/projects/{project}/metrics', [ProjectController::class, 'metrics']);
-    Route::post('/projects/{project}/users', [ProjectController::class, 'attachUser']);
-    Route::delete('/projects/{project}/users/{user}', [ProjectController::class, 'detachUser']);
-    Route::post('/projects/{project}/skills', [ProjectController::class, 'attachSkill']);
-    Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkill']);
+    /** ---------------------- [ PROJECTS ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/projects', [ProjectController::class, 'getAgileProjects']);
+    Route::post('/projects', [ProjectController::class, 'createProject']);
+    Route::get('/projects/{project}', [ProjectController::class, 'getProject']);
+    Route::put('/projects/{project}', [ProjectController::class, 'updateProject']);
+    Route::delete('/projects/{project}', [ProjectController::class, 'deleteProject']);
+
+    /* ----------------- PROJECT-RELATED ENDPOINTS ----------------- */
+    Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
+    Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
+    Route::post('/projects/{project}/users', [ProjectController::class, 'attachUserToProject']);
+    Route::delete('/projects/{project}/users/{user}', [ProjectController::class, 'detachUserFromProject']);
+    Route::post('/projects/{project}/skills', [ProjectController::class, 'attachSkillToProject']);
+    Route::delete('/projects/{project}/skills/{skill}', [ProjectController::class, 'detachSkillFromProject']);
 
     /** ---------------------- [ USERS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */

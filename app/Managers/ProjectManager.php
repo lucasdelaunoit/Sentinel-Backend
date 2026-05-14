@@ -7,106 +7,194 @@ use App\Models\Project;
 use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
+use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class ProjectManager
 {
     public function __construct(
-        private readonly SkillCoverageService   $coverage,
-        private readonly RiskCalculationService $risk,
+        private readonly SkillCoverageService   $coverageService,
+        private readonly RiskCalculationService $riskService,
         private readonly ProjectService         $projectService,
     ) {}
 
-    public function getAgileProjects(Request $request): LengthAwarePaginator
+    /**
+     * <summary>
+     *  Retrieve all projects (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @return LengthAwarePaginator Paginated list of projects
+     */
+    public function getAgileProjects(QueryParams $params): LengthAwarePaginator
     {
-        return $this->projectService->getAgileProjects($request);
+        return $this->projectService->getAgileProjects($params);
     }
 
-    public function create(array $data): Project
+    /**
+     * <summary>
+     *  Create a new project inside a transaction, then dispatch its initial risk recalculation.
+     * </summary>
+     *
+     * @param array $data Validated fields
+     * @return Project Newly created project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function createProject(array $data): Project
     {
-        $project = DB::transaction(fn() => Project::create($data));
+        $project = DB::transaction(fn() => $this->projectService->createProject($data));
 
         RecalculateProjectRiskJob::dispatch($project);
 
         return $project;
     }
 
-    public function get(Project $project): Project
+    /**
+     * <summary>
+     *  Retrieve a project with its detail-view relations eager-loaded.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Project Project with users.department, skillRequirements.category, simulations loaded
+     */
+    public function getProject(Project $project): Project
     {
-        return $project->loadMissing([
-            'users.department',
-            'skillRequirements.category',
-            'simulations',
-        ]);
+        return $this->projectService->getProject($project);
     }
 
-    public function update(Project $project, array $data): Project
+    /**
+     * <summary>
+     *  Update a project inside a transaction. Dispatches RecalculateProjectRiskJob when status or progress changed.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param array $data Validated fields to update
+     * @return Project Refreshed project
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function updateProject(Project $project, array $data): Project
     {
-        $project->update($data);
+        $project = DB::transaction(fn() => $this->projectService->updateProject($project, $data));
 
         if (array_intersect(array_keys($data), ['status', 'progress'])) {
             RecalculateProjectRiskJob::dispatch($project);
         }
 
-        return $project->fresh();
+        return $project;
     }
 
-    public function delete(Project $project): void
+    /**
+     * <summary>
+     *  Delete a project inside a transaction.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function deleteProject(Project $project): void
     {
-        $project->delete();
+        DB::transaction(fn() => $this->projectService->deleteProject($project));
     }
 
-    public function getCoverage(Project $project): array
+    /**
+     * <summary>
+     *  Compute the skill-coverage matrix for a project.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Coverage matrix keyed by skill id
+     */
+    public function getProjectCoverage(Project $project): array
     {
-        return $this->coverage->getCoverage($project);
+        return $this->coverageService->getCoverage($project);
     }
 
-    public function getMetrics(Project $project): array
+    /**
+     * <summary>
+     *  Assemble project-level metrics: bus_factor, risk_score, health, redundancy.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array bus_factor, risk_score, health, redundancy
+     */
+    public function getProjectMetrics(Project $project): array
     {
         return [
-            'bus_factor' => $this->risk->computeBusFactor($project),
-            'risk_score' => $this->risk->computeRiskScore($project),
-            'health'     => $this->risk->computeHealthScore($project),
-            'redundancy' => $this->coverage->getRedundancy($project),
+            'bus_factor' => $this->riskService->computeBusFactor($project),
+            'risk_score' => $this->riskService->computeRiskScore($project),
+            'health'     => $this->riskService->computeHealthScore($project),
+            'redundancy' => $this->coverageService->getRedundancy($project),
         ];
     }
 
-    public function attachUser(Project $project, int $userId): void
+    /**
+     * <summary>
+     *  Attach a user to a project inside a transaction, then dispatch project risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param int $userId User id to attach
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function attachUserToProject(Project $project, int $userId): void
     {
-        DB::transaction(function () use ($project, $userId) {
-            $project->users()->syncWithoutDetaching([$userId]);
-        });
+        DB::transaction(fn() => $this->projectService->attachUserToProject($project, $userId));
 
         RecalculateProjectRiskJob::dispatch($project);
     }
 
-    public function detachUser(Project $project, int $userId): void
+    /**
+     * <summary>
+     *  Detach a user from a project inside a transaction, then dispatch project risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param int $userId User id to detach
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function detachUserFromProject(Project $project, int $userId): void
     {
-        DB::transaction(function () use ($project, $userId) {
-            $project->users()->detach($userId);
-        });
+        DB::transaction(fn() => $this->projectService->detachUserFromProject($project, $userId));
 
         RecalculateProjectRiskJob::dispatch($project);
     }
 
-    public function attachSkill(Project $project, int $skillId, int $requiredLevel): void
+    /**
+     * <summary>
+     *  Attach a skill requirement to a project inside a transaction, then dispatch project risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param int $skillId Skill id to require
+     * @param int $requiredLevel Required level (1–5)
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function attachSkillToProject(Project $project, int $skillId, int $requiredLevel): void
     {
-        DB::transaction(function () use ($project, $skillId, $requiredLevel) {
-            $project->skillRequirements()->syncWithoutDetaching([
-                $skillId => ['required_level' => $requiredLevel],
-            ]);
-        });
+        DB::transaction(fn() => $this->projectService->attachSkillToProject($project, $skillId, $requiredLevel));
 
         RecalculateProjectRiskJob::dispatch($project);
     }
 
-    public function detachSkill(Project $project, int $skillId): void
+    /**
+     * <summary>
+     *  Detach a skill requirement from a project inside a transaction, then dispatch project risk recalculation.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param int $skillId Skill id to detach
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function detachSkillFromProject(Project $project, int $skillId): void
     {
-        DB::transaction(function () use ($project, $skillId) {
-            $project->skillRequirements()->detach($skillId);
-        });
+        DB::transaction(fn() => $this->projectService->detachSkillFromProject($project, $skillId));
 
         RecalculateProjectRiskJob::dispatch($project);
     }
