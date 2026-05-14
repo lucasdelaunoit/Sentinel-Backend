@@ -82,15 +82,53 @@ class ProjectService
 
     /**
      * <summary>
-     *  Persist a new project record.
+     *  Persist a new project row.
      * </summary>
      *
-     * @param array $data Validated fields
+     * @param array $data Validated fields (name, description, started_at, deadline)
      * @return Project Newly created project
      */
     public function createProject(array $data): Project
     {
         return Project::create($data);
+    }
+
+    /**
+     * <summary>
+     *  Attach a batch of users to a project pivot in one query (idempotent).
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param int[] $userIds User ids to attach
+     * @return void
+     */
+    public function attachUsersToProject(Project $project, array $userIds): void
+    {
+        if ($userIds === []) return;
+
+        $project->users()->syncWithoutDetaching($userIds);
+    }
+
+    /**
+     * <summary>
+     *  Attach a batch of skill requirements to a project pivot in one query (idempotent).
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @param array<int, array{skill_id:int, required_level:int}> $requirements List of skill requirements
+     * @return void
+     */
+    public function attachSkillsToProject(Project $project, array $requirements): void
+    {
+        if ($requirements === []) return;
+
+        $payload = collect($requirements)
+            ->mapWithKeys(fn(array $r) => [
+                (int) $r['skill_id'] => ['required_level' => (int) $r['required_level']],
+            ])
+            ->all();
+
+        $project->skillRequirements()->syncWithoutDetaching($payload);
     }
 
     /**

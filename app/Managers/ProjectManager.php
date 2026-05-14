@@ -15,9 +15,9 @@ use Throwable;
 class ProjectManager
 {
     public function __construct(
-        private readonly SkillCoverageService   $coverageService,
+        private readonly SkillCoverageService $coverageService,
         private readonly RiskCalculationService $riskService,
-        private readonly ProjectService         $projectService,
+        private readonly ProjectService $projectService,
     ) {}
 
     /**
@@ -47,20 +47,38 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Create a new project inside a transaction, then dispatch its initial risk recalculation.
+     *  Create a new project inside a transaction. Optionally attaches initial team members and
+     *  skill requirements in the same transaction so the project lands fully wired.
+     *  Orchestrates ProjectService for: row insert + user pivot batch + skill-requirement pivot batch.
+     *
+     *  TODO(recalc): decide later whether to dispatch RecalculateProjectRiskJob here.
+     *    - Skip when no users + no skills attached (recalc would be a no-op).
+     *    - Dispatch when at least one of user_ids / skill_requirements is present.
+     *    Pending the new FragilityService landing — wire job dispatch then.
      * </summary>
      *
-     * @param array $data Validated fields
-     * @return Project Newly created project
+     * @param array $data Validated payload. Keys:
+     *                    name, description, started_at, deadline,
+     *                    user_ids?: int[],
+     *                    skill_requirements?: array<int, array{skill_id:int, required_level:int}>
+     * @return Project Newly created project with users.department + skillRequirements.category loaded
      * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
     public function createProject(array $data): Project
     {
-        $project = DB::transaction(fn() => $this->projectService->createProject($data));
+        $userIds      = $data['user_ids'] ?? [];
+        $requirements = $data['skill_requirements'] ?? [];
+        $projectData  = collect($data)->except(['user_ids', 'skill_requirements'])->all();
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $project = DB::transaction(function () use ($projectData, $userIds, $requirements) {
+            $project = $this->projectService->createProject($projectData);
+            $this->projectService->attachUsersToProject($project, $userIds);
+            $this->projectService->attachSkillsToProject($project, $requirements);
 
-        return $project;
+            return $project;
+        });
+
+        return $project->load(['users.department', 'skillRequirements.category']);
     }
 
     /**

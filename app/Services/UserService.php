@@ -69,7 +69,6 @@ class UserService
                 AllowedSort::field('title'),
                 AllowedSort::field('created_at'),
             ])
-            ->defaultSort('name')
             ->paginate($request->integer('per_page', 20))
             ->appends($request->query());
     }
