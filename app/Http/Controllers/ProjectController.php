@@ -79,7 +79,7 @@ class ProjectController extends Controller
      * </summary>
      *
      * @param Project $project Route-model bound project
-     * @return ProjectResource Project with users, skill requirements and simulations
+     * @return ProjectResource Project with users and skill requirements
      */
     public function getProject(Project $project): ProjectResource
     {

@@ -87,7 +87,7 @@ class ProjectManager
      * </summary>
      *
      * @param Project $project Target project
-     * @return Project Project with users.department, skillRequirements.category, simulations loaded
+     * @return Project Project with users.department and skillRequirements loaded
      */
     public function getProject(Project $project): Project
     {

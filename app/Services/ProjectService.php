@@ -137,14 +137,13 @@ class ProjectService
      * </summary>
      *
      * @param Project $project Target project
-     * @return Project Project with users.department, skillRequirements.category, simulations loaded
+     * @return Project Project with users.department and skillRequirements loaded
      */
     public function getProject(Project $project): Project
     {
         return $project->loadMissing([
             'users.department',
-            'skillRequirements.category',
-            'simulations',
+            'skillRequirements',
         ]);
     }
 
@@ -278,7 +277,7 @@ class ProjectService
     {
         $project->update([
             'completed_at' => now(),
-            'paused_at'    => null,
+            'paused_at' => null,
         ]);
 
         return $project->fresh();
