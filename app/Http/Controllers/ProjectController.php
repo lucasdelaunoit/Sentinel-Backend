@@ -8,6 +8,7 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\ProjectStatsResource;
+use App\Http\Resources\ProjectsStatsResource;
 use App\Managers\ProjectManager;
 use App\Models\Project;
 use App\Models\Skill;
@@ -28,12 +29,29 @@ class ProjectController extends Controller
      *  Aggregate project-wide stats: total, avg_health, fragile count, at_risk count.
      * </summary>
      *
-     * @return ProjectStatsResource total, avg_health, fragile, at_risk
+     * @return ProjectsStatsResource total, avg_health, fragile, at_risk
      */
-    public function getProjectStats(): ProjectStatsResource
+    public function getProjectsStats(): ProjectsStatsResource
     {
         // Act (Manager)
-        $stats = $this->projectManager->getProjectStats();
+        $stats = $this->projectManager->getProjectsStats();
+
+        // Return (Controller)
+        return new ProjectsStatsResource($stats);
+    }
+
+    /**
+     * <summary>
+     *  Per-project stats card: risk_score, bus_factor, health_score, team{total, away}.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return ProjectStatsResource risk_score, bus_factor, health_score, team
+     */
+    public function getProjectStats(Project $project): ProjectStatsResource
+    {
+        // Act (Manager)
+        $stats = $this->projectManager->getProjectStats($project);
 
         // Return (Controller)
         return new ProjectStatsResource($stats);

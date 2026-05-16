@@ -34,7 +34,7 @@ class ProjectService
      *
      * @return array total, avg_health, fragile, at_risk
      */
-    public function getProjectStats(): array
+    public function getProjectsStats(): array
     {
         $base = Project::query()->whereNull('archived_at');
 
@@ -48,6 +48,39 @@ class ProjectService
             'avg_health' => $avgHealth,
             'fragile' => $fragile,
             'at_risk' => $atRisk,
+        ];
+    }
+
+    /**
+     * <summary>
+     *  Assemble per-project stats card payload from the project's precomputed columns and
+     *  current team availability. Returns: risk_score, bus_factor, health_score, team{total, away}.
+     *  "away" counts attached users with an absence active today.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array risk_score, bus_factor, health_score, team{total, away}
+     */
+    public function getProjectStats(Project $project): array
+    {
+        $today = now()->toDateString();
+
+        $total = $project->users()->count();
+        $away  = $project->users()
+            ->whereHas('absences', fn($q) => $q
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+            )
+            ->count();
+
+        return [
+            'risk_score'   => (int) $project->risk_score,
+            'bus_factor'   => (int) $project->bus_factor,
+            'health_score' => (int) $project->health,
+            'team'         => [
+                'total' => $total,
+                'away'  => $away,
+            ],
         ];
     }
 

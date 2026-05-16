@@ -27,9 +27,22 @@ class ProjectManager
      *
      * @return array total, avg_health, fragile, at_risk
      */
-    public function getProjectStats(): array
+    public function getProjectsStats(): array
     {
-        return $this->projectService->getProjectStats();
+        return $this->projectService->getProjectsStats();
+    }
+
+    /**
+     * <summary>
+     *  Assemble per-project stats card payload: risk_score, bus_factor, health_score, team{total, away}.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array risk_score, bus_factor, health_score, team{total, away}
+     */
+    public function getProjectStats(Project $project): array
+    {
+        return $this->projectService->getProjectStats($project);
     }
 
     /**

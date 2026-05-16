@@ -32,7 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /** ---------------------- [ PROJECTS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
-    Route::get('/projects/stats', [ProjectController::class, 'getProjectStats']);
+    Route::get('/projects/stats', [ProjectController::class, 'getProjectsStats']);
 
     /* ----------------- COMMON ENDPOINTS ----------------- */
     Route::get('/projects', [ProjectController::class, 'getAgileProjects']);
@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/unarchive', [ProjectController::class, 'unarchiveProject']);
 
     /* ----------------- PROJECT-RELATED ENDPOINTS ----------------- */
+    Route::get('/projects/{project}/stats', [ProjectController::class, 'getProjectStats']);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
     Route::post('/projects/{project}/users', [ProjectController::class, 'attachUserToProject']);
