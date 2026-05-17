@@ -2,8 +2,11 @@
 
 use App\Http\Controllers\AbsenceController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CompanyHolidayController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\OrganizationSettingController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SkillCategoryController;
@@ -108,4 +111,21 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Departments
     Route::apiResource('departments', DepartmentController::class)->except(['show']);
+
+    /** ---------------------- [ ORGANIZATION SETTINGS ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/organization/settings', [OrganizationSettingController::class, 'getOrganizationSetting']);
+    Route::put('/organization/settings', [OrganizationSettingController::class, 'updateOrganizationSetting']);
+
+    /** ---------------------- [ CALENDAR ] ---------------------- */
+    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/calendar/summary', [CalendarController::class, 'getCalendarSummary']);
+    Route::put('/calendar/settings', [CalendarController::class, 'updateCalendarSetting']);
+
+    /** ---------------------- [ COMPANY HOLIDAYS ] ---------------------- */
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/company-holidays', [CompanyHolidayController::class, 'getAgileCompanyHolidays']);
+    Route::post('/company-holidays', [CompanyHolidayController::class, 'createCompanyHoliday']);
+    Route::put('/company-holidays/{companyHoliday}', [CompanyHolidayController::class, 'updateCompanyHoliday']);
+    Route::delete('/company-holidays/{companyHoliday}', [CompanyHolidayController::class, 'deleteCompanyHoliday']);
 });
