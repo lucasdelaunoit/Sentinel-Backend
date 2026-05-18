@@ -108,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         /* ----------------- CALENDAR ----------------- */
         Route::get('/calendar', [CalendarController::class, 'getCalendarSummary']);
+        Route::get('/workdays', [CalendarController::class, 'getWorkingDays']);
         Route::patch('/working-days', [CalendarController::class, 'updateCalendarSetting']);
 
         /* ----------------- HOLIDAYS ----------------- */

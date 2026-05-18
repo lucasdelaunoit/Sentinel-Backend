@@ -33,6 +33,18 @@ class CalendarManager
 
     /**
      * <summary>
+     *  Return only the working_days bit array from the singleton settings row.
+     * </summary>
+     *
+     * @return array 7-bit Mon-Sun array
+     */
+    public function getWorkingDays(): array
+    {
+        return $this->organizationSettingService->getWorkingDays();
+    }
+
+    /**
+     * <summary>
      *  Build a calendar summary for a given month — combines settings + holidays + computed counters.
      * </summary>
      *

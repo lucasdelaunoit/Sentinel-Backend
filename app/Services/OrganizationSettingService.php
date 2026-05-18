@@ -20,7 +20,6 @@ class OrganizationSettingService
             [
                 'name'                               => 'Sentinel',
                 'fragility_tolerance'                => 'balanced',
-                'working_days'                       => [1, 1, 1, 1, 1, 0, 0],
                 'fragility_weight_bus_factor'        => 35,
                 'fragility_weight_uncovered_skills'  => 30,
                 'fragility_weight_silos'             => 20,
@@ -83,5 +82,20 @@ class OrganizationSettingService
         ])));
 
         return $setting->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Return the working_days bit array (7 ints Mon-Sun) from the singleton settings row.
+     *  Falls back to default Mon-Fri pattern if column is null. Does not create the singleton.
+     * </summary>
+     *
+     * @return array<int, int> 7-bit Mon-Sun array
+     */
+    public function getWorkingDays(): array
+    {
+        $row = OrganizationSetting::query()->find(1);
+
+        return $row?->working_days ?? [1, 1, 1, 1, 1, 0, 0];
     }
 }

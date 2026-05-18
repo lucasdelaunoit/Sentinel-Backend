@@ -15,7 +15,6 @@ class OrganizationSettingResource extends JsonResource
             'id'                                 => $this->id,
             'name'                               => $this->name,
             'fragility_tolerance'                => $this->fragility_tolerance,
-            'working_days'                       => $this->working_days,
             'fragility_weight_bus_factor'        => $this->fragility_weight_bus_factor,
             'fragility_weight_uncovered_skills'  => $this->fragility_weight_uncovered_skills,
             'fragility_weight_silos'             => $this->fragility_weight_silos,

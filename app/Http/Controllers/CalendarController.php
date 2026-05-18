@@ -7,6 +7,7 @@ use App\Http\Resources\CalendarSummaryResource;
 use App\Http\Resources\OrganizationSettingResource;
 use App\Managers\CalendarManager;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CalendarController extends Controller
@@ -30,6 +31,22 @@ class CalendarController extends Controller
 
         // Return (Controller)
         return new OrganizationSettingResource($setting);
+    }
+
+    /**
+     * <summary>
+     *  Return only working_days bit array (7 ints, Mon-Sun).
+     * </summary>
+     *
+     * @return JsonResponse { working_days: int[] }
+     */
+    public function getWorkingDays(): JsonResponse
+    {
+        // Act (Manager)
+        $workingDays = $this->calendarManager->getWorkingDays();
+
+        // Return (Controller)
+        return response()->json(['working_days' => $workingDays]);
     }
 
     /**
