@@ -3,88 +3,72 @@
 namespace App\Services;
 
 use App\Models\Project;
-use App\Models\User;
-use Carbon\Carbon;
 
+/**
+ * STUB — calculation layer wiped. Returns hardcoded realistic values so
+ * controllers/managers compile while the real engine is rebuilt from
+ * settings + projects/users/skills + rules.
+ *
+ * TODO: replace every method with the real implementation.
+ */
 class SkillCoverageService
 {
-    public function __construct(
-        private readonly OrganizationSettingService $orgSettings,
-    ) {}
-
     public function getCoverage(Project $project): array
     {
-        return $this->buildCoverage($project, []);
+        // TODO: real implementation — build matrix from project_skill_reqs vs assigned users.
+        return $this->stubMatrix($project);
     }
 
     public function getCoverageAfterAbsence(Project $project, array $excludedUserIds): array
     {
-        return $this->buildCoverage($project, $excludedUserIds);
+        // TODO: real implementation — same as getCoverage minus excluded users.
+        return $this->stubMatrix($project);
     }
 
     public function getRedundancy(Project $project): array
     {
-        return collect($this->getCoverage($project))
-            ->mapWithKeys(fn($skill) => [$skill['skill_id'] => count($skill['employees'])])
-            ->all();
+        // TODO: real implementation — count of covering users per skill.
+        $matrix = $this->stubMatrix($project);
+        $out = [];
+        foreach ($matrix as $skillId => $row) {
+            $out[$skillId] = count($row['employees']);
+        }
+        return $out;
     }
 
-    private function buildCoverage(Project $project, array $excludedIds): array
+    private function stubMatrix(Project $project): array
     {
-        // TODO: refactor coverage computation — extract "active-today absence" predicate to AbsenceService.
-        $project->loadMissing([
-            'skillRequirements',
-            'users.skills',
-            'users.absences',
-        ]);
+        $project->loadMissing('skillRequirements');
 
-        $today        = Carbon::today();
-        $siloThreshold = $this->orgSettings->getOrganizationSetting()->silo_threshold;
-
-        $absentIds = array_unique(array_merge(
-            $excludedIds,
-            $project->users
-                ->filter(fn(User $u) => $u->absences->contains(
-                    fn($a) => Carbon::parse($a->start_date)->lte($today)
-                        && Carbon::parse($a->end_date)->gte($today)
-                ))
-                ->pluck('id')
-                ->all()
-        ));
-
-        $available = $project->users->whereNotIn('id', $absentIds)->values();
-
+        $statuses = ['safe', 'siloed', 'uncovered'];
         $result = [];
+        $i = 0;
 
         foreach ($project->skillRequirements as $skill) {
-            $required = $skill->pivot->required_level;
+            $status = $statuses[$i % 3];
+            $count  = match ($status) {
+                'safe'     => 3,
+                'siloed'   => 1,
+                'uncovered'=> 0,
+            };
 
-            $covering = $available
-                ->filter(function (User $u) use ($skill, $required) {
-                    $match = $u->skills->firstWhere('id', $skill->id);
-                    return $match && $match->pivot->level >= $required;
-                })
-                ->map(fn(User $u) => [
-                    'user_id' => $u->id,
-                    'name'    => $u->name,
-                    'level'   => $u->skills->firstWhere('id', $skill->id)->pivot->level,
-                ])
-                ->values()
-                ->all();
-
-            $count = count($covering);
+            $employees = [];
+            for ($j = 0; $j < $count; $j++) {
+                $employees[] = [
+                    'user_id' => 1000 + $j,
+                    'name'    => "Stub User {$j}",
+                    'level'   => 4,
+                ];
+            }
 
             $result[$skill->id] = [
                 'skill_id'       => $skill->id,
                 'skill_name'     => $skill->name,
-                'required_level' => $required,
-                'employees'      => $covering,
-                'status'         => match (true) {
-                    $count === 0              => 'uncovered',
-                    $count <= $siloThreshold  => 'siloed',
-                    default                   => 'safe',
-                },
+                'required_level' => $skill->pivot->required_level ?? 3,
+                'employees'      => $employees,
+                'status'         => $status,
             ];
+            $i++;
         }
 
         return $result;

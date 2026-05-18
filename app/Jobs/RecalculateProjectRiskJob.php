@@ -10,6 +10,12 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * STUB — writes hardcoded realistic risk columns. Calculation engine wiped.
+ *
+ * TODO: restore real recalc once the new calc layer is built (greedy bus factor,
+ * weighted fragility from settings + rule penalty, trajectory blend).
+ */
 class RecalculateProjectRiskJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

@@ -46,7 +46,7 @@ class CalendarController extends Controller
         $workingDays = $this->calendarManager->getWorkingDays();
 
         // Return (Controller)
-        return response()->json(['working_days' => $workingDays]);
+        return response()->json($workingDays);
     }
 
     /**

@@ -87,7 +87,7 @@ class OrganizationSettingService
     /**
      * <summary>
      *  Return the working_days bit array (7 ints Mon-Sun) from the singleton settings row.
-     *  Falls back to default Mon-Fri pattern if column is null. Does not create the singleton.
+     *  Falls back to default Mon-Fri pattern if column is null.
      * </summary>
      *
      * @return array<int, int> 7-bit Mon-Sun array

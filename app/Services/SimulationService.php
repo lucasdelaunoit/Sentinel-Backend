@@ -5,84 +5,46 @@ namespace App\Services;
 use App\Models\Project;
 use App\Models\Simulation;
 
+/**
+ * STUB — calculation layer wiped. Returns a hardcoded realistic simulation
+ * payload so SimulationManager keeps working while the real engine is rebuilt.
+ *
+ * TODO: replace with real implementation that reuses the new coverage + scoring services.
+ */
 class SimulationService
 {
-    public function __construct(
-        private readonly SkillCoverageService  $coverage,
-        private readonly RiskCalculationService $risk,
-    ) {}
-
     public function run(Simulation $simulation): array
     {
         $simulation->loadMissing(['project', 'absentUsers']);
 
-        $project   = $simulation->project;
-        $absentIds = $simulation->absentUsers->pluck('id')->all();
-
-        return $this->computeImpact($project, $absentIds);
+        return $this->computeImpact(
+            $simulation->project,
+            $simulation->absentUsers->pluck('id')->all(),
+        );
     }
 
     public function computeImpact(Project $project, array $absentUserIds): array
     {
-        $baseline  = $this->coverage->getCoverage($project);
-        $simulated = $this->coverage->getCoverageAfterAbsence($project, $absentUserIds);
-
-        $diff = [];
-        foreach ($simulated as $skillId => $simSkill) {
-            $before = $baseline[$skillId]['status'] ?? 'uncovered';
-            $after  = $simSkill['status'];
-
-            if ($before !== $after) {
-                $diff[$skillId] = ['before' => $before, 'after' => $after, 'skill_name' => $simSkill['skill_name']];
-            }
-        }
-
-        $originalMetrics = [
-            'bus_factor'     => $this->risk->computeBusFactor($project),
-            'fragility_raw'  => $this->risk->computeFragilityRaw($project),
-            'trajectory_raw' => $this->risk->computeTrajectoryRaw($project),
-        ];
-
-        $simulatedBusFactor  = $this->computeSimulatedBusFactor($simulated);
-        $simulatedFragility  = $this->computeSimulatedFragilityRaw($project, $simulated, $simulatedBusFactor);
-        $simulatedTrajectory = round((100 - $simulatedFragility) * 0.7 + ($project->progress ?? 0) * 0.3, 2);
-
+        // TODO: real implementation — diff baseline vs absence-injected matrix, recompute scores.
         return [
-            'project_id'        => $project->id,
-            'absent_users'      => $absentUserIds,
-            'original_metrics'  => $originalMetrics,
-            'simulated_metrics' => [
-                'bus_factor'     => $simulatedBusFactor,
-                'fragility_raw'  => $simulatedFragility,
-                'trajectory_raw' => $simulatedTrajectory,
+            'project_id'       => $project->id,
+            'absent_users'     => $absentUserIds,
+            'original_metrics' => [
+                'bus_factor'     => 3,
+                'fragility_raw'  => 42.5,
+                'trajectory_raw' => 67.0,
             ],
-            'coverage_diff'          => $diff,
-            'newly_uncovered_count'  => collect($diff)->where('after', 'uncovered')->count(),
-            'newly_siloed_count'     => collect($diff)->where('after', 'siloed')->count(),
+            'simulated_metrics' => [
+                'bus_factor'     => 1,
+                'fragility_raw'  => 71.0,
+                'trajectory_raw' => 38.0,
+            ],
+            'coverage_diff' => [
+                101 => ['before' => 'safe',   'after' => 'siloed',    'skill_name' => 'Stub Skill A'],
+                102 => ['before' => 'siloed', 'after' => 'uncovered', 'skill_name' => 'Stub Skill B'],
+            ],
+            'newly_uncovered_count' => 1,
+            'newly_siloed_count'    => 1,
         ];
-    }
-
-    private function computeSimulatedBusFactor(array $matrix): int
-    {
-        $covered = collect($matrix)->filter(fn($s) => count($s['employees']) > 0);
-
-        if ($covered->isEmpty()) return 0;
-
-        return (int) $covered->min(fn($s) => count($s['employees']));
-    }
-
-    private function computeSimulatedFragilityRaw(Project $project, array $matrix, int $busFactor): float
-    {
-        $total = count($matrix);
-        if ($total === 0) return 0.0;
-
-        $uncovered = collect($matrix)->where('status', 'uncovered')->count();
-        $siloed    = collect($matrix)->where('status', 'siloed')->count();
-
-        $busRisk       = $busFactor >= 5 ? 0 : max(0, 100 - $busFactor * 20);
-        $uncoveredRisk = ($uncovered / $total) * 100;
-        $siloRisk      = ($siloed / $total) * 100;
-
-        return round($busRisk * 0.35 + $uncoveredRisk * 0.30 + $siloRisk * 0.20, 2);
     }
 }
