@@ -12,10 +12,12 @@ class ProjectStatsResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'risk_score'   => $this->resource['risk_score'],
-            'bus_factor'   => $this->resource['bus_factor'],
-            'health_score' => $this->resource['health_score'],
-            'team'         => $this->resource['team'],
+            'fragility_raw'  => $this->resource['fragility_raw'],
+            'fragility'      => $this->resource['fragility'],
+            'bus_factor'     => $this->resource['bus_factor'],
+            'trajectory_raw' => $this->resource['trajectory_raw'],
+            'trajectory'     => $this->resource['trajectory'],
+            'team'           => $this->resource['team'],
         ];
     }
 }

@@ -20,7 +20,7 @@ return new class extends Migration
             // Operational profile
             $table->string('methodology')->default('agile');
             $table->string('team_structure')->default('cross-functional');
-            $table->string('risk_tolerance')->default('balanced');
+            $table->string('fragility_tolerance')->default('balanced');
 
             // Calendar
             $table->json('working_days')->nullable();

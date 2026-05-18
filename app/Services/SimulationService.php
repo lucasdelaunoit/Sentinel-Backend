@@ -38,23 +38,23 @@ class SimulationService
         }
 
         $originalMetrics = [
-            'bus_factor' => $this->risk->computeBusFactor($project),
-            'risk_score' => $this->risk->computeRiskScore($project),
-            'health'     => $this->risk->computeHealthScore($project),
+            'bus_factor'     => $this->risk->computeBusFactor($project),
+            'fragility_raw'  => $this->risk->computeFragilityRaw($project),
+            'trajectory_raw' => $this->risk->computeTrajectoryRaw($project),
         ];
 
-        $simulatedBusFactor = $this->computeSimulatedBusFactor($simulated);
-        $simulatedRisk      = $this->computeSimulatedRiskScore($project, $simulated, $simulatedBusFactor);
-        $simulatedHealth    = round((100 - $simulatedRisk) * 0.7 + ($project->progress ?? 0) * 0.3, 2);
+        $simulatedBusFactor  = $this->computeSimulatedBusFactor($simulated);
+        $simulatedFragility  = $this->computeSimulatedFragilityRaw($project, $simulated, $simulatedBusFactor);
+        $simulatedTrajectory = round((100 - $simulatedFragility) * 0.7 + ($project->progress ?? 0) * 0.3, 2);
 
         return [
             'project_id'        => $project->id,
             'absent_users'      => $absentUserIds,
             'original_metrics'  => $originalMetrics,
             'simulated_metrics' => [
-                'bus_factor' => $simulatedBusFactor,
-                'risk_score' => $simulatedRisk,
-                'health'     => $simulatedHealth,
+                'bus_factor'     => $simulatedBusFactor,
+                'fragility_raw'  => $simulatedFragility,
+                'trajectory_raw' => $simulatedTrajectory,
             ],
             'coverage_diff'          => $diff,
             'newly_uncovered_count'  => collect($diff)->where('after', 'uncovered')->count(),
@@ -71,7 +71,7 @@ class SimulationService
         return (int) $covered->min(fn($s) => count($s['employees']));
     }
 
-    private function computeSimulatedRiskScore(Project $project, array $matrix, int $busFactor): float
+    private function computeSimulatedFragilityRaw(Project $project, array $matrix, int $busFactor): float
     {
         $total = count($matrix);
         if ($total === 0) return 0.0;

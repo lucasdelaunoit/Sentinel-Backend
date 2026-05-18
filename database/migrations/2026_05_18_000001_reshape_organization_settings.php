@@ -22,19 +22,19 @@ return new class extends Migration
         });
 
         Schema::table('organization_settings', function (Blueprint $table) {
-            // Risk weights — feed RiskCalculationService::computeRiskScore
-            $table->unsignedTinyInteger('risk_weight_bus_factor')->default(35);
-            $table->unsignedTinyInteger('risk_weight_uncovered_skills')->default(30);
-            $table->unsignedTinyInteger('risk_weight_silos')->default(20);
-            $table->unsignedTinyInteger('risk_weight_absence_impact')->default(15);
+            // Fragility weights — feed RiskCalculationService::computeFragilityRaw
+            $table->unsignedTinyInteger('fragility_weight_bus_factor')->default(35);
+            $table->unsignedTinyInteger('fragility_weight_uncovered_skills')->default(30);
+            $table->unsignedTinyInteger('fragility_weight_silos')->default(20);
+            $table->unsignedTinyInteger('fragility_weight_absence_impact')->default(15);
 
             // Thresholds
             $table->unsignedTinyInteger('silo_threshold')->default(1);
             $table->unsignedTinyInteger('kci_min_level')->default(3);
             $table->unsignedTinyInteger('critical_bus_factor_threshold')->default(2);
 
-            // Health split (risk vs progress, sum=100)
-            $table->unsignedTinyInteger('health_risk_weight')->default(70);
+            // Trajectory blend (fragility share vs progress share, sum=100)
+            $table->unsignedTinyInteger('trajectory_fragility_weight')->default(70);
 
             // Absence look-ahead window for absence_impact
             $table->unsignedSmallInteger('absence_horizon_days')->default(14);
@@ -42,7 +42,7 @@ return new class extends Migration
             // Per-rule-violation drag on day-health
             $table->unsignedTinyInteger('rule_violation_penalty')->default(15);
 
-            // Keep risk_tolerance — already present as string. Re-default to balanced if null.
+            // fragility_tolerance already present as string from base migration.
         });
     }
 
@@ -50,14 +50,14 @@ return new class extends Migration
     {
         Schema::table('organization_settings', function (Blueprint $table) {
             $table->dropColumn([
-                'risk_weight_bus_factor',
-                'risk_weight_uncovered_skills',
-                'risk_weight_silos',
-                'risk_weight_absence_impact',
+                'fragility_weight_bus_factor',
+                'fragility_weight_uncovered_skills',
+                'fragility_weight_silos',
+                'fragility_weight_absence_impact',
                 'silo_threshold',
                 'kci_min_level',
                 'critical_bus_factor_threshold',
-                'health_risk_weight',
+                'trajectory_fragility_weight',
                 'absence_horizon_days',
                 'rule_violation_penalty',
             ]);

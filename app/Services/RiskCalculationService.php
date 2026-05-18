@@ -26,7 +26,17 @@ class RiskCalculationService
         return (int) $covered->min(fn($s) => count($s['employees']));
     }
 
-    public function computeRiskScore(Project $project): float
+    /**
+     * <summary>
+     *  Compute structural fragility 0-100 (higher = more fragile).
+     *  Weighted blend of bus-factor risk, uncovered skills, silos, upcoming absence impact.
+     *  Multiplied by fragility_tolerance.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return float Fragility raw score (0-100)
+     */
+    public function computeFragilityRaw(Project $project): float
     {
         $matrix = $this->coverage->getCoverage($project);
         $total  = count($matrix);
@@ -45,10 +55,10 @@ class RiskCalculationService
         $absenceRisk   = $this->computeAbsenceImpact($project, $matrix);
 
         $weights = [
-            $settings->risk_weight_bus_factor,
-            $settings->risk_weight_uncovered_skills,
-            $settings->risk_weight_silos,
-            $settings->risk_weight_absence_impact,
+            $settings->fragility_weight_bus_factor,
+            $settings->fragility_weight_uncovered_skills,
+            $settings->fragility_weight_silos,
+            $settings->fragility_weight_absence_impact,
         ];
         $sum = max(1, array_sum($weights));
 
@@ -59,7 +69,7 @@ class RiskCalculationService
             $absenceRisk   * $weights[3]
         ) / $sum;
 
-        $tolerance = match ($settings->risk_tolerance) {
+        $tolerance = match ($settings->fragility_tolerance) {
             'conservative' => 1.2,
             'aggressive'   => 0.8,
             default        => 1.0,
@@ -68,15 +78,62 @@ class RiskCalculationService
         return round(min(100, $weighted * $tolerance), 2);
     }
 
-    public function computeHealthScore(Project $project): float
+    /**
+     * <summary>
+     *  Compute forward-looking trajectory 0-100 (higher = better outlook).
+     *  Blends inverted fragility with progress using trajectory_fragility_weight as the fragility share.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return float Trajectory raw score (0-100)
+     */
+    public function computeTrajectoryRaw(Project $project): float
     {
-        $risk     = $this->computeRiskScore($project);
-        $progress = (float) ($project->progress ?? 0);
+        $fragility = $this->computeFragilityRaw($project);
+        $progress  = (float) ($project->progress ?? 0);
 
-        $riskWeight = $this->orgSettings->getOrganizationSetting()->health_risk_weight / 100.0;
-        $progWeight = 1.0 - $riskWeight;
+        $fragShare = $this->orgSettings->getOrganizationSetting()->trajectory_fragility_weight / 100.0;
+        $progShare = 1.0 - $fragShare;
 
-        return round((100 - $risk) * $riskWeight + $progress * $progWeight, 2);
+        return round((100 - $fragility) * $fragShare + $progress * $progShare, 2);
+    }
+
+    /**
+     * <summary>
+     *  Map a fragility raw score (0-100) to its tier key. Higher = worse.
+     * </summary>
+     *
+     * @param float|int $raw Raw fragility score
+     * @return string Tier key: solid|stable|stretched|fragile|critical
+     */
+    public static function fragilityTier(float|int $raw): string
+    {
+        return match (true) {
+            $raw <= 20 => 'solid',
+            $raw <= 40 => 'stable',
+            $raw <= 60 => 'stretched',
+            $raw <= 80 => 'fragile',
+            default    => 'critical',
+        };
+    }
+
+    /**
+     * <summary>
+     *  Map a trajectory raw score (0-100) to its tier key. Higher = better.
+     * </summary>
+     *
+     * @param float|int $raw Raw trajectory score
+     * @return string Tier key: off_course|drifting|wobbling|on_track|cruising
+     */
+    public static function trajectoryTier(float|int $raw): string
+    {
+        return match (true) {
+            $raw <= 20 => 'off_course',
+            $raw <= 40 => 'drifting',
+            $raw <= 60 => 'wobbling',
+            $raw <= 80 => 'on_track',
+            default    => 'cruising',
+        };
     }
 
     public function computeKCI(SkillCategory $category): float

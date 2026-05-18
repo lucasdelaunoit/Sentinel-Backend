@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Project;
+use App\Services\RiskCalculationService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -14,52 +15,40 @@ class ProjectService
     /**
      * <summary>
      *  Aggregate project-wide stats for the Projects page header.
-     *  Scope: non-archived projects only (managers do not care about archived projects in the header).
-     *
-     *  Bands (per product spec):
-     *    - 0–39  → Healthy
-     *    - 40–69 → At Risk (Moderate / Warning)
-     *    - 70+   → Fragile
-     *
-     *  TODO(fragility): real Fragility score is not implemented yet. Spec:
-     *    Fragility = 0.40 * BusFactorRisk + 0.35 * CoverageRisk + 0.25 * DependencyRisk
-     *    Health    = 100 - Fragility
-     *  When the FragilityService lands, swap `risk_score` / `health` reads below for the new
-     *  precomputed columns (e.g. `fragility`) populated by RecalculateProjectRiskJob.
-     *
-     *  TODO(compute mode): currently reads precomputed columns (`risk_score`, `health`). Decide later
-     *  whether stats should be computed live in the Service vs. aggregated from columns updated by
-     *  the recalculation job. Live = always fresh but slower; precomputed = fast but depends on jobs.
+     *  Scope: non-archived projects only.
+     *  Returns avg trajectory raw + tier and bucket counts derived from fragility tiers:
+     *    - critical_count: fragility tier in {fragile, critical} (raw > 60)
+     *    - stretched_count: fragility tier = stretched (41 <= raw <= 60)
      * </summary>
      *
-     * @return array total, avg_health, fragile, at_risk
+     * @return array total, avg_trajectory_raw, avg_trajectory, critical_count, stretched_count
      */
     public function getProjectsStats(): array
     {
         $base = Project::query()->whereNull('archived_at');
 
-        $total = (clone $base)->count();
-        $avgHealth = (int) round((clone $base)->avg('health') ?? 0);
-        $fragile = (clone $base)->where('risk_score', '>=', 70)->count();
-        $atRisk = (clone $base)->whereBetween('risk_score', [40, 69])->count();
+        $total              = (clone $base)->count();
+        $avgTrajectoryRaw   = (int) round((clone $base)->avg('trajectory_raw') ?? 0);
+        $criticalCount      = (clone $base)->where('fragility_raw', '>', 60)->count();
+        $stretchedCount     = (clone $base)->whereBetween('fragility_raw', [41, 60])->count();
 
         return [
-            'total' => $total,
-            'avg_health' => $avgHealth,
-            'fragile' => $fragile,
-            'at_risk' => $atRisk,
+            'total'              => $total,
+            'avg_trajectory_raw' => $avgTrajectoryRaw,
+            'avg_trajectory'     => RiskCalculationService::trajectoryTier($avgTrajectoryRaw),
+            'critical_count'     => $criticalCount,
+            'stretched_count'    => $stretchedCount,
         ];
     }
 
     /**
      * <summary>
-     *  Assemble per-project stats card payload from the project's precomputed columns and
-     *  current team availability. Returns: risk_score, bus_factor, health_score, team{total, away}.
-     *  "away" counts attached users with an absence active today.
+     *  Assemble per-project stats card payload from precomputed columns + current team availability.
+     *  Returns fragility_raw/fragility tier + trajectory_raw/trajectory tier + team{total, away}.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array risk_score, bus_factor, health_score, team{total, away}
+     * @return array fragility_raw, fragility, bus_factor, trajectory_raw, trajectory, team{total, away}
      */
     public function getProjectStats(Project $project): array
     {
@@ -73,11 +62,16 @@ class ProjectService
             )
             ->count();
 
+        $fragilityRaw  = (int) $project->fragility_raw;
+        $trajectoryRaw = (int) $project->trajectory_raw;
+
         return [
-            'risk_score'   => (int) $project->risk_score,
-            'bus_factor'   => (int) $project->bus_factor,
-            'health_score' => (int) $project->health,
-            'team'         => [
+            'fragility_raw'  => $fragilityRaw,
+            'fragility'      => RiskCalculationService::fragilityTier($fragilityRaw),
+            'bus_factor'     => (int) $project->bus_factor,
+            'trajectory_raw' => $trajectoryRaw,
+            'trajectory'     => RiskCalculationService::trajectoryTier($trajectoryRaw),
+            'team'           => [
                 'total' => $total,
                 'away'  => $away,
             ],
@@ -104,8 +98,8 @@ class ProjectService
                 AllowedSort::field('name'),
                 AllowedSort::field('status'),
                 AllowedSort::field('progress'),
-                AllowedSort::field('risk_score'),
-                AllowedSort::field('health'),
+                AllowedSort::field('fragility_raw'),
+                AllowedSort::field('trajectory_raw'),
                 AllowedSort::field('created_at'),
             ])
             ->defaultSort('-created_at')

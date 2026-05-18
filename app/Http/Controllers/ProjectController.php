@@ -26,10 +26,10 @@ class ProjectController extends Controller
 
     /**
      * <summary>
-     *  Aggregate project-wide stats: total, avg_health, fragile count, at_risk count.
+     *  Aggregate project-wide stats: total, avg_trajectory_raw + tier, critical_count, stretched_count.
      * </summary>
      *
-     * @return ProjectsStatsResource total, avg_health, fragile, at_risk
+     * @return ProjectsStatsResource total, avg_trajectory_raw, avg_trajectory, critical_count, stretched_count
      */
     public function getProjectsStats(): ProjectsStatsResource
     {
@@ -42,11 +42,11 @@ class ProjectController extends Controller
 
     /**
      * <summary>
-     *  Per-project stats card: risk_score, bus_factor, health_score, team{total, away}.
+     *  Per-project stats card: fragility_raw + tier, bus_factor, trajectory_raw + tier, team{total, away}.
      * </summary>
      *
      * @param Project $project Route-model bound project
-     * @return ProjectStatsResource risk_score, bus_factor, health_score, team
+     * @return ProjectStatsResource fragility_raw, fragility, bus_factor, trajectory_raw, trajectory, team
      */
     public function getProjectStats(Project $project): ProjectStatsResource
     {
@@ -162,7 +162,7 @@ class ProjectController extends Controller
 
     /**
      * <summary>
-     *  Retrieve project-level metrics: bus_factor, risk_score, health, redundancy.
+     *  Retrieve project-level metrics: bus_factor, fragility_raw + tier, trajectory_raw + tier, redundancy.
      * </summary>
      *
      * @param Project $project Route-model bound project

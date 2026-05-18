@@ -19,9 +19,9 @@ class Project extends Model
     protected $fillable = [
         'name',
         'description',
-        'risk_score',
+        'fragility_raw',
         'bus_factor',
-        'health',
+        'trajectory_raw',
         'started_at',
         'deadline',
         'paused_at',

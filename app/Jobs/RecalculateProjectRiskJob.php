@@ -23,9 +23,9 @@ class RecalculateProjectRiskJob implements ShouldQueue
     public function handle(RiskCalculationService $risk): void
     {
         $this->project->update([
-            'bus_factor' => $risk->computeBusFactor($this->project),
-            'risk_score' => $risk->computeRiskScore($this->project),
-            'health'     => $risk->computeHealthScore($this->project),
+            'bus_factor'     => $risk->computeBusFactor($this->project),
+            'fragility_raw'  => $risk->computeFragilityRaw($this->project),
+            'trajectory_raw' => $risk->computeTrajectoryRaw($this->project),
         ]);
     }
 }

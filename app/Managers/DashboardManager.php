@@ -7,6 +7,7 @@ use App\Models\SkillCategory;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
+
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class DashboardManager
     public function getTodayStats(): array
     {
         return [
-            'projects_at_risk'   => $this->projectsAtRiskStats(),
+            'fragile_projects'   => $this->fragileProjectsStats(),
             'knowledge_coverage' => $this->knowledgeCoverageStats(),
             'team_availability'  => $this->teamAvailabilityStats(),
             'absence_impact'     => $this->absenceImpactStats(),
@@ -31,20 +32,22 @@ class DashboardManager
     public function getProjectsAtRiskDetail(): array
     {
         $projects = Project::where('status', 'active')
-            ->where('risk_score', '>', 50)
+            ->where('fragility_raw', '>', 50)
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
-            ->orderByDesc('risk_score')
+            ->orderByDesc('fragility_raw')
             ->get();
 
         $mapProject = function (Project $p) {
             $matrix = $this->coverageService->getCoverage($p);
 
             return [
-                'id'            => $p->id,
-                'name'          => $p->name,
-                'risk_score'    => $p->risk_score,
-                'bus_factor'    => $p->bus_factor,
-                'health'        => $p->health,
+                'id'             => $p->id,
+                'name'           => $p->name,
+                'fragility_raw'  => $p->fragility_raw,
+                'fragility'      => RiskCalculationService::fragilityTier($p->fragility_raw),
+                'bus_factor'     => $p->bus_factor,
+                'trajectory_raw' => $p->trajectory_raw,
+                'trajectory'     => RiskCalculationService::trajectoryTier($p->trajectory_raw),
                 'missing_skills' => collect($matrix)
                     ->where('status', 'uncovered')
                     ->map(fn($s) => ['skill_id' => $s['skill_id'], 'skill_name' => $s['skill_name']])
@@ -61,8 +64,8 @@ class DashboardManager
         };
 
         return [
-            'critical' => $projects->filter(fn($p) => $p->risk_score > 75)->map($mapProject)->values()->all(),
-            'unstable' => $projects->filter(fn($p) => $p->risk_score > 50 && $p->risk_score <= 75)->map($mapProject)->values()->all(),
+            'critical' => $projects->filter(fn($p) => $p->fragility_raw > 75)->map($mapProject)->values()->all(),
+            'unstable' => $projects->filter(fn($p) => $p->fragility_raw > 50 && $p->fragility_raw <= 75)->map($mapProject)->values()->all(),
         ];
     }
 
@@ -245,10 +248,10 @@ class DashboardManager
         return ['uncovered_skills' => $uncoveredSkills];
     }
 
-    private function projectsAtRiskStats(): array
+    private function fragileProjectsStats(): array
     {
-        $critical = Project::where('status', 'active')->where('risk_score', '>', 75)->count();
-        $unstable = Project::where('status', 'active')->whereBetween('risk_score', [51, 75])->count();
+        $critical = Project::where('status', 'active')->where('fragility_raw', '>', 75)->count();
+        $unstable = Project::where('status', 'active')->whereBetween('fragility_raw', [51, 75])->count();
         $total    = $critical + $unstable;
 
         $parts = [];
