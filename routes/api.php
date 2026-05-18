@@ -42,7 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects', [ProjectController::class, 'getAgileProjects']);
     Route::post('/projects', [ProjectController::class, 'createProject']);
     Route::get('/projects/{project}', [ProjectController::class, 'getProject']);
-    Route::put('/projects/{project}', [ProjectController::class, 'updateProject']);
+    Route::patch('/projects/{project}', [ProjectController::class, 'updateProject']);
     Route::delete('/projects/{project}', [ProjectController::class, 'deleteProject']);
 
     /* ----------------- LIFECYCLE ACTIONS ----------------- */
@@ -70,7 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users', [UserController::class, 'getAgileUsers']);
     Route::post('/users', [UserController::class, 'createUser']);
     Route::get('/users/{user}', [UserController::class, 'getUser']);
-    Route::put('/users/{user}', [UserController::class, 'updateUser']);
+    Route::patch('/users/{user}', [UserController::class, 'updateUser']);
     Route::delete('/users/{user}', [UserController::class, 'deleteUser']);
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
@@ -78,12 +78,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
     Route::get('/users/{user}/skills', [SkillController::class, 'getAgileSkillsForUser']);
     Route::post('/users/{user}/skills', [UserController::class, 'attachSkillToUser']);
-    Route::put('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);
+    Route::patch('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);
     Route::delete('/users/{user}/skills/{skill}', [UserController::class, 'detachSkillFromUser']);
 
     /** ---------------------- [ ABSENCES ] ---------------------- */
     /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::put('/absences/{absence}', [AbsenceController::class, 'updateAbsence']);
+    Route::patch('/absences/{absence}', [AbsenceController::class, 'updateAbsence']);
     Route::delete('/absences/{absence}', [AbsenceController::class, 'deleteAbsence']);
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
@@ -93,51 +93,47 @@ Route::middleware('auth:sanctum')->group(function () {
     // Simulations
     Route::apiResource('simulations', SimulationController::class)->except(['update']);
 
-    /** ---------------------- [ SKILLS ] ---------------------- */
-    /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/skills', [SkillController::class, 'getAgileSkills']);
-    Route::post('/skills', [SkillController::class, 'createSkill']);
-    Route::put('/skills/{skill}', [SkillController::class, 'updateSkill']);
-    Route::delete('/skills/{skill}', [SkillController::class, 'deleteSkill']);
-
-    /** ---------------------- [ SKILL CATEGORIES ] ---------------------- */
-    /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);
-    Route::post('/skill-categories', [SkillCategoryController::class, 'createCategory']);
-    Route::put('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'updateSkillCategory']);
-    Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteSkillCategory']);
-
-    /* ----------------- SKILL-CATEGORY-RELATED ENDPOINTS ----------------- */
-    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
-
     // Departments
     Route::apiResource('departments', DepartmentController::class)->except(['show']);
 
-    /** ---------------------- [ ORGANIZATION SETTINGS ] ---------------------- */
-    /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/organization/settings', [OrganizationSettingController::class, 'getOrganizationSetting']);
-    Route::put('/organization/settings', [OrganizationSettingController::class, 'updateOrganizationSetting']);
+    /* ----------------- DERIVED METRICS (not settings) ----------------- */
+    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
 
-    /** ---------------------- [ CALENDAR ] ---------------------- */
-    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
-    Route::get('/calendar/summary', [CalendarController::class, 'getCalendarSummary']);
-    Route::put('/calendar/settings', [CalendarController::class, 'updateCalendarSetting']);
+    /** ---------------------- [ SETTINGS ] ---------------------- */
+    Route::prefix('settings')->group(function () {
 
-    /** ---------------------- [ RULES ] ---------------------- */
-    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
-    Route::get('/rules/violations', [RuleController::class, 'getRuleViolations']);
-    Route::get('/simulations/{simulation}/rule-violations', [RuleController::class, 'evaluateSimulationRules']);
+        /* ----------------- GENERAL ----------------- */
+        Route::get('/general', [OrganizationSettingController::class, 'getOrganizationSetting']);
+        Route::patch('/general', [OrganizationSettingController::class, 'updateOrganizationSetting']);
 
-    /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/rules', [RuleController::class, 'getAgileRules']);
-    Route::post('/rules', [RuleController::class, 'createRule']);
-    Route::put('/rules/{rule}', [RuleController::class, 'updateRule']);
-    Route::delete('/rules/{rule}', [RuleController::class, 'deleteRule']);
+        /* ----------------- CALENDAR ----------------- */
+        Route::get('/calendar', [CalendarController::class, 'getCalendarSummary']);
+        Route::patch('/working-days', [CalendarController::class, 'updateCalendarSetting']);
 
-    /** ---------------------- [ COMPANY HOLIDAYS ] ---------------------- */
-    /* ----------------- COMMON ENDPOINTS ----------------- */
-    Route::get('/company-holidays', [CompanyHolidayController::class, 'getAgileCompanyHolidays']);
-    Route::post('/company-holidays', [CompanyHolidayController::class, 'createCompanyHoliday']);
-    Route::put('/company-holidays/{companyHoliday}', [CompanyHolidayController::class, 'updateCompanyHoliday']);
-    Route::delete('/company-holidays/{companyHoliday}', [CompanyHolidayController::class, 'deleteCompanyHoliday']);
+        /* ----------------- HOLIDAYS ----------------- */
+        Route::get('/holidays', [CompanyHolidayController::class, 'getAgileCompanyHolidays']);
+        Route::post('/holidays', [CompanyHolidayController::class, 'createCompanyHoliday']);
+        Route::patch('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'updateCompanyHoliday']);
+        Route::delete('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'deleteCompanyHoliday']);
+
+        /* ----------------- RULES ----------------- */
+        Route::get('/rules/violations', [RuleController::class, 'getRuleViolations']);
+        Route::get('/rules/simulations/{simulation}/violations', [RuleController::class, 'evaluateSimulationRules']);
+        Route::get('/rules', [RuleController::class, 'getAgileRules']);
+        Route::post('/rules', [RuleController::class, 'createRule']);
+        Route::patch('/rules/{rule}', [RuleController::class, 'updateRule']);
+        Route::delete('/rules/{rule}', [RuleController::class, 'deleteRule']);
+
+        /* ----------------- SKILL CATEGORIES ----------------- */
+        Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);
+        Route::post('/skill-categories', [SkillCategoryController::class, 'createCategory']);
+        Route::patch('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'updateSkillCategory']);
+        Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteSkillCategory']);
+
+        /* ----------------- SKILLS ----------------- */
+        Route::get('/skills', [SkillController::class, 'getAgileSkills']);
+        Route::post('/skills', [SkillController::class, 'createSkill']);
+        Route::patch('/skills/{skill}', [SkillController::class, 'updateSkill']);
+        Route::delete('/skills/{skill}',[SkillController::class, 'deleteSkill']);
+    });
 });
