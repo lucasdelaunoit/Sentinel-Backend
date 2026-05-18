@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\DB;
 class RiskCalculationService
 {
     public function __construct(
-        private readonly SkillCoverageService $coverage,
+        private readonly SkillCoverageService        $coverage,
+        private readonly OrganizationSettingService  $orgSettings,
     ) {}
 
     public function computeBusFactor(Project $project): int
@@ -32,6 +33,8 @@ class RiskCalculationService
 
         if ($total === 0) return 0.0;
 
+        $settings = $this->orgSettings->getOrganizationSetting();
+
         $uncovered  = collect($matrix)->where('status', 'uncovered')->count();
         $siloed     = collect($matrix)->where('status', 'siloed')->count();
         $busFactor  = $this->computeBusFactor($project);
@@ -41,13 +44,28 @@ class RiskCalculationService
         $siloRisk      = ($siloed / $total) * 100;
         $absenceRisk   = $this->computeAbsenceImpact($project, $matrix);
 
-        return round(
-            $busRisk * 0.35 +
-            $uncoveredRisk * 0.30 +
-            $siloRisk * 0.20 +
-            $absenceRisk * 0.15,
-            2
-        );
+        $weights = [
+            $settings->risk_weight_bus_factor,
+            $settings->risk_weight_uncovered_skills,
+            $settings->risk_weight_silos,
+            $settings->risk_weight_absence_impact,
+        ];
+        $sum = max(1, array_sum($weights));
+
+        $weighted = (
+            $busRisk       * $weights[0] +
+            $uncoveredRisk * $weights[1] +
+            $siloRisk      * $weights[2] +
+            $absenceRisk   * $weights[3]
+        ) / $sum;
+
+        $tolerance = match ($settings->risk_tolerance) {
+            'conservative' => 1.2,
+            'aggressive'   => 0.8,
+            default        => 1.0,
+        };
+
+        return round(min(100, $weighted * $tolerance), 2);
     }
 
     public function computeHealthScore(Project $project): float
@@ -55,16 +73,21 @@ class RiskCalculationService
         $risk     = $this->computeRiskScore($project);
         $progress = (float) ($project->progress ?? 0);
 
-        return round((100 - $risk) * 0.7 + $progress * 0.3, 2);
+        $riskWeight = $this->orgSettings->getOrganizationSetting()->health_risk_weight / 100.0;
+        $progWeight = 1.0 - $riskWeight;
+
+        return round((100 - $risk) * $riskWeight + $progress * $progWeight, 2);
     }
 
     public function computeKCI(SkillCategory $category): float
     {
         $category->loadMissing('skills.users');
 
+        $minLevel = $this->orgSettings->getOrganizationSetting()->kci_min_level;
+
         $allIds       = $category->skills->flatMap(fn($s) => $s->users->pluck('id'))->unique();
         $qualifiedIds = $category->skills->flatMap(fn($s) =>
-            $s->users->filter(fn($u) => $u->pivot->level >= 3)->pluck('id')
+            $s->users->filter(fn($u) => $u->pivot->level >= $minLevel)->pluck('id')
         )->unique();
 
         if ($allIds->isEmpty()) return 0.0;
@@ -75,6 +98,8 @@ class RiskCalculationService
     public function computeUserCriticality(User $user): array
     {
         $user->loadMissing(['skills', 'projects.skillRequirements', 'projects.users.skills']);
+
+        $criticalBf = $this->orgSettings->getOrganizationSetting()->critical_bus_factor_threshold;
 
         $skillIds = $user->skills->pluck('id');
         $uniqueSkillCount = DB::table('user_skills')
@@ -102,7 +127,7 @@ class RiskCalculationService
             }
 
             $busFactor = $this->computeBusFactor($project);
-            if ($busFactor <= 2) {
+            if ($busFactor <= $criticalBf) {
                 $busFactorCount++;
             }
         }
@@ -124,14 +149,15 @@ class RiskCalculationService
 
     private function computeAbsenceImpact(Project $project, array $baseline): float
     {
-        $today = Carbon::today();
+        $horizon = $this->orgSettings->getOrganizationSetting()->absence_horizon_days;
+        $today   = Carbon::today();
+        $until   = $today->copy()->addDays($horizon);
 
-        // TODO: extract "active-today absence" predicate to AbsenceService for reuse.
         $project->loadMissing('users.absences');
 
         $absentIds = $project->users
             ->filter(fn($u) => $u->absences->contains(
-                fn($a) => Carbon::parse($a->start_date)->lte($today)
+                fn($a) => Carbon::parse($a->start_date)->lte($until)
                     && Carbon::parse($a->end_date)->gte($today)
             ))
             ->pluck('id')

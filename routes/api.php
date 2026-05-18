@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\OrganizationSettingController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\RuleController;
 use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SkillCategoryController;
 use App\Http\Controllers\SkillController;
@@ -121,6 +122,17 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
     Route::get('/calendar/summary', [CalendarController::class, 'getCalendarSummary']);
     Route::put('/calendar/settings', [CalendarController::class, 'updateCalendarSetting']);
+
+    /** ---------------------- [ RULES ] ---------------------- */
+    /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/rules/violations', [RuleController::class, 'getRuleViolations']);
+    Route::get('/simulations/{simulation}/rule-violations', [RuleController::class, 'evaluateSimulationRules']);
+
+    /* ----------------- COMMON ENDPOINTS ----------------- */
+    Route::get('/rules', [RuleController::class, 'getAgileRules']);
+    Route::post('/rules', [RuleController::class, 'createRule']);
+    Route::put('/rules/{rule}', [RuleController::class, 'updateRule']);
+    Route::delete('/rules/{rule}', [RuleController::class, 'deleteRule']);
 
     /** ---------------------- [ COMPANY HOLIDAYS ] ---------------------- */
     /* ----------------- COMMON ENDPOINTS ----------------- */

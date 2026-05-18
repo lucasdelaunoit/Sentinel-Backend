@@ -8,6 +8,10 @@ use Carbon\Carbon;
 
 class SkillCoverageService
 {
+    public function __construct(
+        private readonly OrganizationSettingService $orgSettings,
+    ) {}
+
     public function getCoverage(Project $project): array
     {
         return $this->buildCoverage($project, []);
@@ -34,7 +38,8 @@ class SkillCoverageService
             'users.absences',
         ]);
 
-        $today = Carbon::today();
+        $today        = Carbon::today();
+        $siloThreshold = $this->orgSettings->getOrganizationSetting()->silo_threshold;
 
         $absentIds = array_unique(array_merge(
             $excludedIds,
@@ -75,9 +80,9 @@ class SkillCoverageService
                 'required_level' => $required,
                 'employees'      => $covering,
                 'status'         => match (true) {
-                    $count === 0 => 'uncovered',
-                    $count === 1 => 'siloed',
-                    default      => 'safe',
+                    $count === 0              => 'uncovered',
+                    $count <= $siloThreshold  => 'siloed',
+                    default                   => 'safe',
                 },
             ];
         }

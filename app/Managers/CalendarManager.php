@@ -53,7 +53,6 @@ class CalendarManager
             'month'                 => $month,
             'working_days'          => $setting->working_days,
             'working_days_per_week' => $perWeek,
-            'standard_days_month'   => $setting->standard_days_month,
             'working_days_in_month' => $working,
             'company_holidays'      => $holidays,
             'preview'               => $preview,

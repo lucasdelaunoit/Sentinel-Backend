@@ -10,13 +10,18 @@ class UpdateOrganizationSettingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'           => ['sometimes', 'required', 'string', 'max:255'],
-            'industry'       => ['sometimes', 'nullable', 'string', 'max:100'],
-            'size'           => ['sometimes', 'nullable', Rule::in(['1-10', '11-50', '51-200', '201-500', '500+'])],
-            'location'       => ['sometimes', 'nullable', 'string', 'max:100'],
-            'methodology'    => ['sometimes', 'required', Rule::in(['agile', 'waterfall', 'kanban', 'scrumban'])],
-            'team_structure' => ['sometimes', 'required', Rule::in(['cross-functional', 'functional', 'matrix', 'squad'])],
-            'risk_tolerance' => ['sometimes', 'required', Rule::in(['conservative', 'balanced', 'aggressive'])],
+            'name'                          => ['sometimes', 'required', 'string', 'max:255'],
+            'risk_tolerance'                => ['sometimes', 'required', Rule::in(['conservative', 'balanced', 'aggressive'])],
+            'risk_weight_bus_factor'        => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'risk_weight_uncovered_skills'  => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'risk_weight_silos'             => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'risk_weight_absence_impact'    => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'silo_threshold'                => ['sometimes', 'integer', 'min:1', 'max:5'],
+            'kci_min_level'                 => ['sometimes', 'integer', 'min:1', 'max:5'],
+            'critical_bus_factor_threshold' => ['sometimes', 'integer', 'min:1', 'max:10'],
+            'health_risk_weight'            => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'absence_horizon_days'          => ['sometimes', 'integer', 'min:1', 'max:90'],
+            'rule_violation_penalty'        => ['sometimes', 'integer', 'min:0', 'max:100'],
         ];
     }
 }

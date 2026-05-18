@@ -18,23 +18,30 @@ class OrganizationSettingService
         return OrganizationSetting::firstOrCreate(
             ['id' => 1],
             [
-                'name'                => 'Sentinel',
-                'methodology'         => 'agile',
-                'team_structure'      => 'cross-functional',
-                'risk_tolerance'      => 'balanced',
-                'working_days'        => [1, 1, 1, 1, 1, 0, 0],
-                'standard_days_month' => 22,
+                'name'                          => 'Sentinel',
+                'risk_tolerance'                => 'balanced',
+                'working_days'                  => [1, 1, 1, 1, 1, 0, 0],
+                'risk_weight_bus_factor'        => 35,
+                'risk_weight_uncovered_skills'  => 30,
+                'risk_weight_silos'             => 20,
+                'risk_weight_absence_impact'    => 15,
+                'silo_threshold'                => 1,
+                'kci_min_level'                 => 3,
+                'critical_bus_factor_threshold' => 2,
+                'health_risk_weight'            => 70,
+                'absence_horizon_days'          => 14,
+                'rule_violation_penalty'        => 15,
             ],
         );
     }
 
     /**
      * <summary>
-     *  Update identity + operational profile fields on the singleton settings row.
-     *  Calendar fields (working_days, timezone) are not touched by this method.
+     *  Update identity + risk/threshold config fields on the singleton settings row.
+     *  Calendar fields (working_days) are not touched by this method.
      * </summary>
      *
-     * @param array $data Validated payload — identity + operational fields
+     * @param array $data Validated payload
      * @return OrganizationSetting Freshly reloaded settings row
      */
     public function updateOrganizationSetting(array $data): OrganizationSetting
@@ -43,12 +50,17 @@ class OrganizationSettingService
 
         $setting->update(array_intersect_key($data, array_flip([
             'name',
-            'industry',
-            'size',
-            'location',
-            'methodology',
-            'team_structure',
             'risk_tolerance',
+            'risk_weight_bus_factor',
+            'risk_weight_uncovered_skills',
+            'risk_weight_silos',
+            'risk_weight_absence_impact',
+            'silo_threshold',
+            'kci_min_level',
+            'critical_bus_factor_threshold',
+            'health_risk_weight',
+            'absence_horizon_days',
+            'rule_violation_penalty',
         ])));
 
         return $setting->fresh();
@@ -56,7 +68,7 @@ class OrganizationSettingService
 
     /**
      * <summary>
-     *  Update calendar fields (working_days, timezone, standard_days_month) on the singleton settings row.
+     *  Update calendar fields (working_days) on the singleton settings row.
      * </summary>
      *
      * @param array $data Validated calendar payload
@@ -68,8 +80,6 @@ class OrganizationSettingService
 
         $setting->update(array_intersect_key($data, array_flip([
             'working_days',
-            'timezone',
-            'standard_days_month',
         ])));
 
         return $setting->fresh();
