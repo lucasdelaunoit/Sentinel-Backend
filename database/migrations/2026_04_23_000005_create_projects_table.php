@@ -16,7 +16,6 @@ return new class extends Migration
             // Cached metrics — populated by RecalculateProjectRiskJob
             $table->unsignedTinyInteger('fragility_raw')->default(0);
             $table->unsignedSmallInteger('bus_factor')->default(0);
-            $table->unsignedTinyInteger('trajectory_raw')->default(100);
 
             // Lifecycle timestamps — status is derived from these
             $table->date('started_at')->nullable();

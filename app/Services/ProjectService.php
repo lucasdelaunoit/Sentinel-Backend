@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Metrics\FragilityScale;
-use App\Metrics\TrajectoryScale;
 use App\Models\Project;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -17,21 +16,21 @@ class ProjectService
      * <summary>
      *  Aggregate project-wide stats for the Projects page header.
      *  Scope: non-archived projects only.
-     *  Returns avg trajectory raw + tier and bucket counts derived from fragility tiers:
+     *  Returns avg fragility raw + tier and bucket counts derived from fragility tiers:
      *    - critical_count: fragility tier in {fragile, critical} (raw > 60)
      *    - stretched_count: fragility tier = stretched (41 <= raw <= 60)
      * </summary>
      *
-     * @return array total, avg_trajectory_raw, avg_trajectory, critical_count, stretched_count
+     * @return array total, avg_fragility_raw, avg_fragility, critical_count, stretched_count
      */
     public function getProjectsStats(): array
     {
         $base = Project::query()->whereNull('archived_at');
 
-        $total              = (clone $base)->count();
-        $avgTrajectoryRaw   = (int) round((clone $base)->avg('trajectory_raw') ?? 0);
-        $criticalCount      = (clone $base)->where('fragility_raw', '>', 60)->count();
-        $stretchedCount     = (clone $base)->whereBetween('fragility_raw', [41, 60])->count();
+        $total            = (clone $base)->count();
+        $avgFragilityRaw  = (int) round((clone $base)->avg('fragility_raw') ?? 0);
+        $criticalCount    = (clone $base)->where('fragility_raw', '>', 60)->count();
+        $stretchedCount   = (clone $base)->whereBetween('fragility_raw', [41, 60])->count();
 
         $severity = match (true) {
             $criticalCount > 0  => 'critical',
@@ -40,24 +39,24 @@ class ProjectService
         };
 
         return [
-            'total'              => $total,
-            'avg_trajectory_raw' => $avgTrajectoryRaw,
-            'avg_trajectory'          => TrajectoryScale::fromRaw($avgTrajectoryRaw)->value,
-            'avg_trajectory_severity' => TrajectoryScale::fromRaw($avgTrajectoryRaw)->severity(),
-            'critical_count'     => $criticalCount,
-            'stretched_count'    => $stretchedCount,
-            'severity'           => $severity,
+            'total'                  => $total,
+            'avg_fragility_raw'      => $avgFragilityRaw,
+            'avg_fragility'          => FragilityScale::fromRaw($avgFragilityRaw)->value,
+            'avg_fragility_severity' => FragilityScale::fromRaw($avgFragilityRaw)->severity(),
+            'critical_count'         => $criticalCount,
+            'stretched_count'        => $stretchedCount,
+            'severity'               => $severity,
         ];
     }
 
     /**
      * <summary>
      *  Assemble per-project stats card payload from precomputed columns + current team availability.
-     *  Returns fragility_raw/fragility tier + trajectory_raw/trajectory tier + team{total, away}.
+     *  Returns fragility_raw/fragility tier + team{total, away}.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array fragility_raw, fragility, bus_factor, trajectory_raw, trajectory, team{total, away}
+     * @return array fragility_raw, fragility, bus_factor, team{total, away}
      */
     public function getProjectStats(Project $project): array
     {
@@ -71,17 +70,13 @@ class ProjectService
             )
             ->count();
 
-        $fragilityRaw  = (int) $project->fragility_raw;
-        $trajectoryRaw = (int) $project->trajectory_raw;
+        $fragilityRaw = (int) $project->fragility_raw;
 
         return [
             'fragility_raw'      => $fragilityRaw,
             'fragility'          => FragilityScale::fromRaw($fragilityRaw)->value,
             'fragility_severity' => FragilityScale::fromRaw($fragilityRaw)->severity(),
             'bus_factor'         => (int) $project->bus_factor,
-            'trajectory_raw'      => $trajectoryRaw,
-            'trajectory'          => TrajectoryScale::fromRaw($trajectoryRaw)->value,
-            'trajectory_severity' => TrajectoryScale::fromRaw($trajectoryRaw)->severity(),
             'team' => [
                 'total' => $total,
                 'away'  => $away,
@@ -110,7 +105,6 @@ class ProjectService
                 AllowedSort::field('status'),
                 AllowedSort::field('progress'),
                 AllowedSort::field('fragility_raw'),
-                AllowedSort::field('trajectory_raw'),
                 AllowedSort::field('created_at'),
             ])
             ->defaultSort('-created_at')

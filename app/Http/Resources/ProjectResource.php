@@ -19,7 +19,6 @@ class ProjectResource extends JsonResource
             'status'             => $this->status,
             'fragility'          => MetricPresenter::fragility((int) $this->fragility_raw),
             'bus_factor'         => MetricPresenter::busFactor((int) $this->bus_factor),
-            'trajectory'         => MetricPresenter::trajectory((int) $this->trajectory_raw),
             'started_at'         => $this->started_at,
             'deadline'           => $this->deadline,
             'paused_at'          => $this->paused_at,

@@ -23,7 +23,6 @@ class OrganizationSettingSeeder extends Seeder
                 'silo_threshold'                     => 1,
                 'kci_min_level'                      => 3,
                 'critical_bus_factor_threshold'      => 2,
-                'trajectory_fragility_weight'        => 70,
                 'absence_horizon_days'               => 14,
                 'rule_violation_penalty'             => 15,
             ],

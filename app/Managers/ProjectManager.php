@@ -4,7 +4,6 @@ namespace App\Managers;
 
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\FragilityScale;
-use App\Metrics\TrajectoryScale;
 use App\Models\Project;
 use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
@@ -25,10 +24,10 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Aggregate project-wide stats: total, avg_trajectory_raw + tier, critical_count, stretched_count.
+     *  Aggregate project-wide stats: total, avg_fragility_raw + tier, critical_count, stretched_count.
      * </summary>
      *
-     * @return array total, avg_trajectory_raw, avg_trajectory, critical_count, stretched_count
+     * @return array total, avg_fragility_raw, avg_fragility, critical_count, stretched_count
      */
     public function getProjectsStats(): array
     {
@@ -37,11 +36,11 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Assemble per-project stats card payload: fragility_raw + tier, bus_factor, trajectory_raw + tier, team.
+     *  Assemble per-project stats card payload: fragility_raw + tier, bus_factor, team.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array fragility_raw, fragility, bus_factor, trajectory_raw, trajectory, team{total, away}
+     * @return array fragility_raw, fragility, bus_factor, team{total, away}
      */
     public function getProjectStats(Project $project): array
     {
@@ -158,23 +157,20 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Assemble project-level metrics: bus_factor, fragility_raw + tier, trajectory_raw + tier, redundancy.
+     *  Assemble project-level metrics: bus_factor, fragility_raw + tier, redundancy.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array bus_factor, fragility_raw, fragility, trajectory_raw, trajectory, redundancy
+     * @return array bus_factor, fragility_raw, fragility, redundancy
      */
     public function getProjectMetrics(Project $project): array
     {
-        $fragilityRaw  = $this->riskService->computeFragilityRaw($project);
-        $trajectoryRaw = $this->riskService->computeTrajectoryRaw($project);
+        $fragilityRaw = $this->riskService->computeFragilityRaw($project);
 
         return [
             'bus_factor'     => $this->riskService->computeBusFactor($project),
             'fragility_raw'  => $fragilityRaw,
             'fragility'      => FragilityScale::fromRaw($fragilityRaw)->value,
-            'trajectory_raw' => $trajectoryRaw,
-            'trajectory'     => TrajectoryScale::fromRaw($trajectoryRaw)->value,
             'redundancy'     => $this->coverageService->getRedundancy($project),
         ];
     }

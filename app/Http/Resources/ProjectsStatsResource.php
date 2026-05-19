@@ -21,7 +21,7 @@ class ProjectsStatsResource extends JsonResource
                 zeroLabel: 'None',
                 hint:      'Active projects',
             ),
-            'avg_trajectory' => MetricPresenter::trajectory((int) $r['avg_trajectory_raw']),
+            'avg_fragility' => MetricPresenter::fragility((int) $r['avg_fragility_raw']),
             'fragile_count' => MetricPresenter::count(
                 n:         (int) $r['critical_count'],
                 severity:  $r['critical_count'] > 0 ? 'critical' : 'ok',

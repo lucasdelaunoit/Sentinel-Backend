@@ -6,7 +6,6 @@ use App\Metrics\BusFactorScale;
 use App\Metrics\CriticalityScale;
 use App\Metrics\FragilityScale;
 use App\Metrics\Scale;
-use App\Metrics\TrajectoryScale;
 
 /**
  * Metric presenter. Shapes a raw domain metric into the standard
@@ -61,12 +60,6 @@ class MetricPresenter
     public static function fragility(float|int $raw): array
     {
         return self::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: " . (int) round($raw) . "/100");
-    }
-
-    /** <summary>Project trajectory (0-100, higher = better).</summary> */
-    public static function trajectory(float|int $raw): array
-    {
-        return self::fromScale(TrajectoryScale::fromRaw($raw), $raw, "Score: " . (int) round($raw) . "/100");
     }
 
     /** <summary>User criticality (0-100).</summary> */

@@ -19,7 +19,6 @@ class UpdateOrganizationSettingRequest extends FormRequest
             'silo_threshold'                     => ['sometimes', 'integer', 'min:1', 'max:5'],
             'kci_min_level'                      => ['sometimes', 'integer', 'min:1', 'max:5'],
             'critical_bus_factor_threshold'      => ['sometimes', 'integer', 'min:1', 'max:10'],
-            'trajectory_fragility_weight'        => ['sometimes', 'integer', 'min:0', 'max:100'],
             'absence_horizon_days'               => ['sometimes', 'integer', 'min:1', 'max:90'],
             'rule_violation_penalty'             => ['sometimes', 'integer', 'min:0', 'max:100'],
         ];

@@ -22,7 +22,6 @@ class Project extends Model
         'description',
         'fragility_raw',
         'bus_factor',
-        'trajectory_raw',
         'started_at',
         'deadline',
         'paused_at',

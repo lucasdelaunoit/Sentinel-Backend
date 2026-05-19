@@ -32,12 +32,10 @@ class SimulationService
             'original_metrics' => [
                 'bus_factor'     => 3,
                 'fragility_raw'  => 42.5,
-                'trajectory_raw' => 67.0,
             ],
             'simulated_metrics' => [
                 'bus_factor'     => 1,
                 'fragility_raw'  => 71.0,
-                'trajectory_raw' => 38.0,
             ],
             'coverage_diff' => [
                 101 => ['before' => 'safe',   'after' => 'siloed',    'skill_name' => 'Stub Skill A'],

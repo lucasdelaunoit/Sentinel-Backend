@@ -99,28 +99,6 @@ class RiskCalculationService
 
     /**
      * <summary>
-     *  Trajectory score (0-100). Blends inverted fragility with time-based progress.
-     *  trajectory = (100 - fragility) * w + progress * (1 - w), w = trajectory_fragility_weight/100.
-     * </summary>
-     *
-     * @param Project $project
-     * @param array<int> $absentUserIds
-     * @return float
-     */
-    public function computeTrajectoryRaw(Project $project, array $absentUserIds = []): float
-    {
-        $settings = $this->orgSettings->getOrganizationSetting();
-        $fragility = $this->computeFragilityRaw($project, $absentUserIds);
-        $progress = (float) $project->progress;
-        $w = (int) $settings->trajectory_fragility_weight;
-        $share = $w / 100;
-
-        $traj = (100 - $fragility) * $share + $progress * (1 - $share);
-        return max(0.0, min(100.0, $traj));
-    }
-
-    /**
-     * <summary>
      *  Knowledge Coverage Index for a skill category. Percentage of category-skill-holders
      *  whose level meets the kci_min_level threshold.
      * </summary>

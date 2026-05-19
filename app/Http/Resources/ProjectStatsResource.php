@@ -19,7 +19,6 @@ class ProjectStatsResource extends JsonResource
         return [
             'fragility'  => MetricPresenter::fragility((float) $r['fragility_raw']),
             'bus_factor' => MetricPresenter::busFactor((int) $r['bus_factor']),
-            'trajectory' => MetricPresenter::trajectory((float) $r['trajectory_raw']),
             'team'       => MetricPresenter::ratio(
                 a:        $present,
                 b:        (int) $team['total'],

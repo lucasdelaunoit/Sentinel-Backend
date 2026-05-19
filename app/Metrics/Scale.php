@@ -7,7 +7,7 @@ namespace App\Metrics;
  * to a discrete tier and exposes the tier's display label + UI severity.
  *
  * Implementations are enums (one per metric family) — see FragilityScale,
- * TrajectoryScale, CriticalityScale, BusFactorScale. Each enum provides
+ * CriticalityScale, BusFactorScale. Each enum provides
  * its own `from*` static factory because input shapes differ (continuous
  * raw score vs integer count).
  */

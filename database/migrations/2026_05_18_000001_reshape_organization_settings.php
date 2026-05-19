@@ -33,9 +33,6 @@ return new class extends Migration
             $table->unsignedTinyInteger('kci_min_level')->default(3);
             $table->unsignedTinyInteger('critical_bus_factor_threshold')->default(2);
 
-            // Trajectory blend (fragility share vs progress share, sum=100)
-            $table->unsignedTinyInteger('trajectory_fragility_weight')->default(70);
-
             // Absence look-ahead window for absence_impact
             $table->unsignedSmallInteger('absence_horizon_days')->default(14);
 
@@ -57,7 +54,6 @@ return new class extends Migration
                 'silo_threshold',
                 'kci_min_level',
                 'critical_bus_factor_threshold',
-                'trajectory_fragility_weight',
                 'absence_horizon_days',
                 'rule_violation_penalty',
             ]);

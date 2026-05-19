@@ -3,7 +3,6 @@
 namespace App\Managers;
 
 use App\Metrics\FragilityScale;
-use App\Metrics\TrajectoryScale;
 use App\Models\Project;
 use App\Models\SkillCategory;
 use App\Models\User;
@@ -48,8 +47,6 @@ class DashboardManager
                 'fragility_raw'  => $p->fragility_raw,
                 'fragility'      => FragilityScale::fromRaw($p->fragility_raw)->value,
                 'bus_factor'     => $p->bus_factor,
-                'trajectory_raw' => $p->trajectory_raw,
-                'trajectory'     => TrajectoryScale::fromRaw($p->trajectory_raw)->value,
                 'missing_skills' => collect($matrix)
                     ->where('status', 'uncovered')
                     ->map(fn($s) => ['skill_id' => $s['skill_id'], 'skill_name' => $s['skill_name']])

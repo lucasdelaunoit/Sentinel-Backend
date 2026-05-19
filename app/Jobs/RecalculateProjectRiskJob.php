@@ -40,7 +40,6 @@ class RecalculateProjectRiskJob implements ShouldQueue, ShouldBeUnique
         $project->update([
             'bus_factor'     => $risk->computeBusFactor($project),
             'fragility_raw'  => (int) round($risk->computeFragilityRaw($project)),
-            'trajectory_raw' => (int) round($risk->computeTrajectoryRaw($project)),
         ]);
     }
 }

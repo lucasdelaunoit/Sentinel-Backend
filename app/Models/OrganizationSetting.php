@@ -17,7 +17,6 @@ class OrganizationSetting extends Model
         'silo_threshold',
         'kci_min_level',
         'critical_bus_factor_threshold',
-        'trajectory_fragility_weight',
         'absence_horizon_days',
         'rule_violation_penalty',
     ];
@@ -31,7 +30,6 @@ class OrganizationSetting extends Model
         'silo_threshold'                     => 'integer',
         'kci_min_level'                      => 'integer',
         'critical_bus_factor_threshold'      => 'integer',
-        'trajectory_fragility_weight'        => 'integer',
         'absence_horizon_days'               => 'integer',
         'rule_violation_penalty'             => 'integer',
     ];

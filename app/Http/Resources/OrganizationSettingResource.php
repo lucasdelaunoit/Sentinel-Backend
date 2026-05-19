@@ -22,7 +22,6 @@ class OrganizationSettingResource extends JsonResource
             'silo_threshold'                     => $this->silo_threshold,
             'kci_min_level'                      => $this->kci_min_level,
             'critical_bus_factor_threshold'      => $this->critical_bus_factor_threshold,
-            'trajectory_fragility_weight'        => $this->trajectory_fragility_weight,
             'absence_horizon_days'               => $this->absence_horizon_days,
             'rule_violation_penalty'             => $this->rule_violation_penalty,
         ];
