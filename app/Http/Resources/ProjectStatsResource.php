@@ -20,10 +20,10 @@ class ProjectStatsResource extends JsonResource
             'fragility'  => StatCard::fragility((float) $r['fragility_raw']),
             'bus_factor' => StatCard::busFactor((int) $r['bus_factor']),
             'trajectory' => StatCard::trajectory((float) $r['trajectory_raw']),
-            'team'       => StatCard::make(
-                value:    "{$present}/{$team['total']} present",
+            'team'       => StatCard::ratio(
+                a:        $present,
+                b:        (int) $team['total'],
                 severity: $team['away'] > 0 ? 'warning' : 'ok',
-                raw:      $present,
                 hint:     $team['away'] > 0 ? "{$team['away']} away today" : 'Full team',
             ),
         ];

@@ -17,22 +17,22 @@ class ProjectsStatsResource extends JsonResource
         return [
             'total' => StatCard::count(
                 n:        (int) $r['total'],
-                singular: 'active project',
-                plural:   'active projects',
                 severity: 'ok',
+                zeroLabel: 'None',
+                hint:      'Active projects',
             ),
             'avg_trajectory' => StatCard::trajectory((int) $r['avg_trajectory_raw']),
-            'fragile_count'  => StatCard::count(
-                n:        (int) $r['critical_count'],
-                singular: 'fragile project',
-                plural:   'fragile projects',
-                severity: $r['critical_count'] > 0 ? 'critical' : 'ok',
+            'fragile_count' => StatCard::count(
+                n:         (int) $r['critical_count'],
+                severity:  $r['critical_count'] > 0 ? 'critical' : 'ok',
+                zeroLabel: 'Healthy',
+                hint:      $r['critical_count'] > 0 ? 'Fragility &gt; 60' : null,
             ),
             'stretched_count' => StatCard::count(
-                n:        (int) $r['stretched_count'],
-                singular: 'stretched project',
-                plural:   'stretched projects',
-                severity: $r['stretched_count'] > 0 ? 'warning' : 'ok',
+                n:         (int) $r['stretched_count'],
+                severity:  $r['stretched_count'] > 0 ? 'warning' : 'ok',
+                zeroLabel: 'None',
+                hint:      $r['stretched_count'] > 0 ? 'Fragility 41-60' : null,
             ),
         ];
     }

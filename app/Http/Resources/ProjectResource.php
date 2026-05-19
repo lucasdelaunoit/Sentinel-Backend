@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Services\RiskCalculationService;
+use App\Support\StatCard;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,11 +17,9 @@ class ProjectResource extends JsonResource
             'name'               => $this->name,
             'description'        => $this->description,
             'status'             => $this->status,
-            'fragility_raw'      => (int) $this->fragility_raw,
-            'fragility'          => RiskCalculationService::fragilityTier((int) $this->fragility_raw),
-            'bus_factor'         => $this->bus_factor,
-            'trajectory_raw'     => (int) $this->trajectory_raw,
-            'trajectory'         => RiskCalculationService::trajectoryTier((int) $this->trajectory_raw),
+            'fragility'          => StatCard::fragility((int) $this->fragility_raw),
+            'bus_factor'         => StatCard::busFactor((int) $this->bus_factor),
+            'trajectory'         => StatCard::trajectory((int) $this->trajectory_raw),
             'started_at'         => $this->started_at,
             'deadline'           => $this->deadline,
             'paused_at'          => $this->paused_at,

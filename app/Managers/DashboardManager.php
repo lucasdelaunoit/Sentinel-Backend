@@ -32,7 +32,7 @@ class DashboardManager
     public function getProjectsAtRiskDetail(): array
     {
         $projects = Project::active()
-            ->where('fragility_raw', '>', 50)
+            ->where('fragility_raw', '>', 40)
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->orderByDesc('fragility_raw')
             ->get();
@@ -64,8 +64,8 @@ class DashboardManager
         };
 
         return [
-            'critical' => $projects->filter(fn($p) => $p->fragility_raw > 75)->map($mapProject)->values()->all(),
-            'unstable' => $projects->filter(fn($p) => $p->fragility_raw > 50 && $p->fragility_raw <= 75)->map($mapProject)->values()->all(),
+            'critical' => $projects->filter(fn($p) => $p->fragility_raw > 60)->map($mapProject)->values()->all(),
+            'unstable' => $projects->filter(fn($p) => $p->fragility_raw > 40 && $p->fragility_raw <= 60)->map($mapProject)->values()->all(),
         ];
     }
 
@@ -250,18 +250,17 @@ class DashboardManager
 
     private function fragileProjectsStats(): array
     {
-        $critical = Project::active()->where('fragility_raw', '>', 75)->count();
-        $unstable = Project::active()->whereBetween('fragility_raw', [51, 75])->count();
-        $total    = $critical + $unstable;
+        $fragile   = Project::active()->where('fragility_raw', '>', 60)->count();
+        $stretched = Project::active()->whereBetween('fragility_raw', [41, 60])->count();
 
         $parts = [];
-        if ($critical > 0) $parts[] = "{$critical} critical";
-        if ($unstable > 0) $parts[] = "{$unstable} unstable";
+        if ($fragile   > 0) $parts[] = "{$fragile} fragile";
+        if ($stretched > 0) $parts[] = "{$stretched} stretched";
 
         return [
-            'value'    => $total,
+            'value'    => $fragile,
             'insight'  => empty($parts) ? "All projects healthy" : implode(' · ', $parts),
-            'severity' => $critical > 0 ? 'critical' : ($unstable > 0 ? 'warning' : 'ok'),
+            'severity' => $fragile > 0 ? 'critical' : ($stretched > 0 ? 'warning' : 'ok'),
         ];
     }
 

@@ -17,28 +17,27 @@ class UserStatsResource extends JsonResource
         $busFactor   = $r['bus_factor_in_org'];
         $skills      = $r['skills'];
         $projects    = $r['active_projects'];
+        $catCount    = count($skills['by_category']);
 
         return [
             'criticality' => StatCard::criticality((int) $criticality['score']),
             'bus_factor_in_org' => StatCard::count(
-                n:        (int) $busFactor['count'],
-                singular: 'project at risk',
-                plural:   'projects at risk',
-                severity: $busFactor['count'] > 0 ? 'critical' : 'ok',
-                hint:     'User pushes bus factor to threshold',
+                n:         (int) $busFactor['count'],
+                severity:  $busFactor['count'] > 0 ? 'critical' : 'ok',
+                zeroLabel: 'Safe',
+                hint:      $busFactor['count'] > 0 ? 'Projects at risk' : 'No single-point exposure',
             ),
             'skills' => StatCard::count(
-                n:        (int) $skills['total'],
-                singular: 'skill',
-                plural:   'skills',
-                severity: 'ok',
-                hint:     'Across ' . count($skills['by_category']) . ' categories',
+                n:         (int) $skills['total'],
+                severity:  'ok',
+                zeroLabel: 'None',
+                hint:      $catCount > 0 ? "{$catCount} categories" : null,
             ),
             'active_projects' => StatCard::count(
-                n:        (int) $projects['count'],
-                singular: 'active project',
-                plural:   'active projects',
-                severity: 'ok',
+                n:         (int) $projects['count'],
+                severity:  'ok',
+                zeroLabel: 'None',
+                hint:      $projects['count'] > 0 ? 'Assigned' : null,
             ),
             'breakdown' => [
                 'criticality_detail'   => [
