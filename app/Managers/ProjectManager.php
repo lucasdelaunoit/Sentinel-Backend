@@ -3,6 +3,8 @@
 namespace App\Managers;
 
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Metrics\FragilityScale;
+use App\Metrics\TrajectoryScale;
 use App\Models\Project;
 use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
@@ -170,9 +172,9 @@ class ProjectManager
         return [
             'bus_factor'     => $this->riskService->computeBusFactor($project),
             'fragility_raw'  => $fragilityRaw,
-            'fragility'      => RiskCalculationService::fragilityTier($fragilityRaw),
+            'fragility'      => FragilityScale::fromRaw($fragilityRaw)->value,
             'trajectory_raw' => $trajectoryRaw,
-            'trajectory'     => RiskCalculationService::trajectoryTier($trajectoryRaw),
+            'trajectory'     => TrajectoryScale::fromRaw($trajectoryRaw)->value,
             'redundancy'     => $this->coverageService->getRedundancy($project),
         ];
     }

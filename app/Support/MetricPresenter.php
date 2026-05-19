@@ -2,7 +2,11 @@
 
 namespace App\Support;
 
-use App\Services\RiskCalculationService;
+use App\Metrics\BusFactorScale;
+use App\Metrics\CriticalityScale;
+use App\Metrics\FragilityScale;
+use App\Metrics\Scale;
+use App\Metrics\TrajectoryScale;
 
 /**
  * Metric presenter. Shapes a raw domain metric into the standard
@@ -15,6 +19,10 @@ use App\Services\RiskCalculationService;
  *  - change:   short delta string ("+5% in 7d"). Hardcoded for now — TODO real snapshots
  *  - hint:     optional one-liner context
  *  - raw:      underlying numeric for tooltip / debug
+ *
+ * Domain-specific value/severity mapping lives in the App\Metrics\Scale enums.
+ * Use `fromScale()` to render any metric that has a Scale; the generic
+ * helpers (`count`, `ratio`, `percentage`, `label`) cover everything else.
  */
 class MetricPresenter
 {
@@ -33,91 +41,45 @@ class MetricPresenter
     }
 
     /**
-     * <summary>Card for a project fragility raw score.</summary>
+     * <summary>
+     *  Render a metric whose label + severity come from a Scale enum.
+     *  Caller supplies the raw numeric (used for the tooltip and rounded raw output)
+     *  and an optional precomposed hint string.
+     * </summary>
      */
+    public static function fromScale(Scale $tier, float|int $raw, ?string $hint = null): array
+    {
+        return self::make(
+            value:    $tier->label(),
+            severity: $tier->severity(),
+            raw:      (int) round($raw),
+            hint:     $hint,
+        );
+    }
+
+    /** <summary>Project fragility (0-100, higher = worse).</summary> */
     public static function fragility(float|int $raw): array
     {
-        $tier  = RiskCalculationService::fragilityTier($raw);
-        $value = match ($tier) {
-            'solid'     => 'Excellent',
-            'stable'    => 'Good',
-            'stretched' => 'Watch',
-            'fragile'   => 'Fragile',
-            'critical'  => 'Critical',
-        };
-
-        return self::make(
-            value:    $value,
-            severity: RiskCalculationService::fragilitySeverity($raw),
-            raw:      (int) round($raw),
-            hint:     "Score: " . (int) round($raw) . "/100",
-        );
+        return self::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: " . (int) round($raw) . "/100");
     }
 
-    /**
-     * <summary>Card for a project trajectory raw score.</summary>
-     */
+    /** <summary>Project trajectory (0-100, higher = better).</summary> */
     public static function trajectory(float|int $raw): array
     {
-        $tier  = RiskCalculationService::trajectoryTier($raw);
-        $value = match ($tier) {
-            'off_course' => 'Off Track',
-            'drifting'   => 'Slipping',
-            'wobbling'   => 'Wobbling',
-            'on_track'   => 'On Track',
-            'cruising'   => 'Cruising',
-        };
-
-        return self::make(
-            value:    $value,
-            severity: RiskCalculationService::trajectorySeverity($raw),
-            raw:      (int) round($raw),
-            hint:     "Score: " . (int) round($raw) . "/100",
-        );
+        return self::fromScale(TrajectoryScale::fromRaw($raw), $raw, "Score: " . (int) round($raw) . "/100");
     }
 
-    /**
-     * <summary>Card for a user criticality score (0-100).</summary>
-     */
+    /** <summary>User criticality (0-100).</summary> */
     public static function criticality(int $score): array
     {
-        $value = match (true) {
-            $score >= 60 => 'Critical',
-            $score >= 30 => 'Notable',
-            default      => 'Low Risk',
-        };
-
-        return self::make(
-            value:    $value,
-            severity: RiskCalculationService::criticalitySeverity($score),
-            raw:      $score,
-        );
+        return self::fromScale(CriticalityScale::fromRaw($score), $score);
     }
 
-    /**
-     * <summary>Card for a bus factor integer (lower = worse).</summary>
-     */
+    /** <summary>Bus factor (count, lower = worse).</summary> */
     public static function busFactor(int $bf): array
     {
-        $severity = match (true) {
-            $bf <= 1 => 'critical',
-            $bf <= 2 => 'warning',
-            default  => 'ok',
-        };
-        $value = match (true) {
-            $bf === 0 => 'No coverage',
-            $bf === 1 => 'Single point',
-            $bf <= 2  => 'Thin',
-            $bf <= 4  => 'Adequate',
-            default   => 'Resilient',
-        };
-
-        return self::make(
-            value:    $value,
-            severity: $severity,
-            raw:      $bf,
-            hint:     $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : null,
-        );
+        $hint = $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : null;
+        return self::fromScale(BusFactorScale::fromCount($bf), $bf, $hint);
     }
 
     /**

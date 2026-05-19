@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
+use App\Metrics\FragilityScale;
+use App\Metrics\TrajectoryScale;
 use App\Models\Project;
-use App\Services\RiskCalculationService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -41,8 +42,8 @@ class ProjectService
         return [
             'total'              => $total,
             'avg_trajectory_raw' => $avgTrajectoryRaw,
-            'avg_trajectory'     => RiskCalculationService::trajectoryTier($avgTrajectoryRaw),
-            'avg_trajectory_severity' => RiskCalculationService::trajectorySeverity($avgTrajectoryRaw),
+            'avg_trajectory'          => TrajectoryScale::fromRaw($avgTrajectoryRaw)->value,
+            'avg_trajectory_severity' => TrajectoryScale::fromRaw($avgTrajectoryRaw)->severity(),
             'critical_count'     => $criticalCount,
             'stretched_count'    => $stretchedCount,
             'severity'           => $severity,
@@ -75,12 +76,12 @@ class ProjectService
 
         return [
             'fragility_raw'      => $fragilityRaw,
-            'fragility'          => RiskCalculationService::fragilityTier($fragilityRaw),
-            'fragility_severity' => RiskCalculationService::fragilitySeverity($fragilityRaw),
+            'fragility'          => FragilityScale::fromRaw($fragilityRaw)->value,
+            'fragility_severity' => FragilityScale::fromRaw($fragilityRaw)->severity(),
             'bus_factor'         => (int) $project->bus_factor,
             'trajectory_raw'      => $trajectoryRaw,
-            'trajectory'          => RiskCalculationService::trajectoryTier($trajectoryRaw),
-            'trajectory_severity' => RiskCalculationService::trajectorySeverity($trajectoryRaw),
+            'trajectory'          => TrajectoryScale::fromRaw($trajectoryRaw)->value,
+            'trajectory_severity' => TrajectoryScale::fromRaw($trajectoryRaw)->severity(),
             'team' => [
                 'total' => $total,
                 'away'  => $away,

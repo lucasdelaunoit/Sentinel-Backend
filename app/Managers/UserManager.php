@@ -4,6 +4,7 @@ namespace App\Managers;
 
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Metrics\CriticalityScale;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\UserService;
@@ -208,7 +209,7 @@ class UserManager
                     'name'     => trim(($row['user']->firstname ?? '') . ' ' . ($row['user']->lastname ?? '')),
                     'title'    => $row['user']->title,
                     'score'    => $row['criticality']['score'],
-                    'severity' => RiskCalculationService::criticalitySeverity($row['criticality']['score']),
+                    'severity' => CriticalityScale::fromRaw($row['criticality']['score'])->severity(),
                 ])->all(),
             ],
         ]);
@@ -242,7 +243,7 @@ class UserManager
 
         return [
             'criticality' => array_merge($criticality, [
-                'severity' => RiskCalculationService::criticalitySeverity($criticality['score']),
+                'severity' => CriticalityScale::fromRaw($criticality['score'])->severity(),
             ]),
             'bus_factor_in_org' => [
                 'count' => $busFactorProjects->count(),
