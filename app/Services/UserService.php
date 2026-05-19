@@ -187,64 +187,6 @@ class UserService
 
     /**
      * <summary>
-     *  Compute the total employee count KPI stat.
-     * </summary>
-     *
-     * @return array value, insight, severity
-     */
-    public function getTotalEmployeesStat(): array
-    {
-        $count     = User::count();
-        $deptCount = Department::whereHas('users')->count();
-
-        return [
-            'value'    => $count,
-            'insight'  => $deptCount > 0
-                ? "Across {$deptCount} department" . ($deptCount > 1 ? 's' : '')
-                : "No departments assigned",
-            'severity' => 'ok',
-        ];
-    }
-
-    /**
-     * <summary>
-     *  Compute the department headcount balance KPI stat.
-     * </summary>
-     *
-     * @return array value (Balanced|Skewed|Imbalanced), insight, severity
-     */
-    public function getDepartmentBalanceStat(): array
-    {
-        $departments = Department::withCount('users')->get();
-        $total       = $departments->sum('users_count');
-
-        if ($total === 0 || $departments->isEmpty()) {
-            return [
-                'value'    => 'Balanced',
-                'insight'  => 'No users assigned',
-                'severity' => 'ok',
-            ];
-        }
-
-        $top      = $departments->sortByDesc('users_count')->first();
-        $maxShare = $top->users_count / $total;
-        $maxPct   = (int) round($maxShare * 100);
-
-        [$label, $severity] = match (true) {
-            $maxShare > 0.60 => ['Imbalanced', 'critical'],
-            $maxShare > 0.40 => ['Skewed', 'warning'],
-            default          => ['Balanced', 'ok'],
-        };
-
-        return [
-            'value'    => $label,
-            'insight'  => "{$top->name} {$maxPct}% of headcount",
-            'severity' => $severity,
-        ];
-    }
-
-    /**
-     * <summary>
      *  Org-wide aggregate user stats used by GET /users/stats.
      *  Returns headcount + today availability + unique-skill-holder count.
      *  Critical-user count and avg criticality are computed in the Manager
@@ -260,7 +202,7 @@ class UserService
         $total = User::count();
         $away  = User::whereHas('absences', fn($q) => $q
             ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date',   '>=', $today)
+            ->whereDate('end_date', '>=', $today)
         )->count();
 
         $uniqueHolders = User::query()
@@ -275,11 +217,10 @@ class UserService
             ->count();
 
         return [
-            'total'                => $total,
-            'available'            => $total - $away,
-            'away'                 => $away,
+            'total' => $total,
+            'available' => $total - $away,
+            'away' => $away,
             'unique_skill_holders' => $uniqueHolders,
-            'departments'          => $this->getDepartmentBalanceStat(),
         ];
     }
 
@@ -290,7 +231,7 @@ class UserService
 
     private function deriveInitials(string $name): string
     {
-        $parts    = array_filter(explode(' ', trim($name)));
+        $parts = array_filter(explode(' ', trim($name)));
         $initials = array_map(fn($p) => strtoupper(mb_substr($p, 0, 1)), array_values($parts));
 
         return implode('', array_slice($initials, 0, 2));

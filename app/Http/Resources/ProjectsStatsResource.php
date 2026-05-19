@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,20 +15,20 @@ class ProjectsStatsResource extends JsonResource
         $r = $this->resource;
 
         return [
-            'total' => StatCard::count(
+            'total' => MetricPresenter::count(
                 n:        (int) $r['total'],
                 severity: 'ok',
                 zeroLabel: 'None',
                 hint:      'Active projects',
             ),
-            'avg_trajectory' => StatCard::trajectory((int) $r['avg_trajectory_raw']),
-            'fragile_count' => StatCard::count(
+            'avg_trajectory' => MetricPresenter::trajectory((int) $r['avg_trajectory_raw']),
+            'fragile_count' => MetricPresenter::count(
                 n:         (int) $r['critical_count'],
                 severity:  $r['critical_count'] > 0 ? 'critical' : 'ok',
                 zeroLabel: 'Healthy',
                 hint:      $r['critical_count'] > 0 ? 'Fragility &gt; 60' : null,
             ),
-            'stretched_count' => StatCard::count(
+            'stretched_count' => MetricPresenter::count(
                 n:         (int) $r['stretched_count'],
                 severity:  $r['stretched_count'] > 0 ? 'warning' : 'ok',
                 zeroLabel: 'None',

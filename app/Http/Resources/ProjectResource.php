@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,9 +17,9 @@ class ProjectResource extends JsonResource
             'name'               => $this->name,
             'description'        => $this->description,
             'status'             => $this->status,
-            'fragility'          => StatCard::fragility((int) $this->fragility_raw),
-            'bus_factor'         => StatCard::busFactor((int) $this->bus_factor),
-            'trajectory'         => StatCard::trajectory((int) $this->trajectory_raw),
+            'fragility'          => MetricPresenter::fragility((int) $this->fragility_raw),
+            'bus_factor'         => MetricPresenter::busFactor((int) $this->bus_factor),
+            'trajectory'         => MetricPresenter::trajectory((int) $this->trajectory_raw),
             'started_at'         => $this->started_at,
             'deadline'           => $this->deadline,
             'paused_at'          => $this->paused_at,

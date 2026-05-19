@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,36 +12,36 @@ class UsersStatsResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        $r = $this->resource;
+        $r       = $this->resource;
+        $total   = (int) $r['total'];
+        $avail   = (int) $r['available'];
+        $crit    = (int) $r['critical_users']['count'];
+        $unique  = (int) $r['unique_skill_holders'];
 
         return [
-            'total' => StatCard::count(
-                n:        (int) $r['total'],
+            'total' => MetricPresenter::make(
+                value:    "{$total} " . ($total === 1 ? 'user' : 'users'),
                 severity: 'ok',
+                raw:      $total,
                 hint:     'Headcount',
             ),
-            'available' => StatCard::count(
-                n:         (int) $r['available'],
-                severity:  $r['away'] > 0 ? 'warning' : 'ok',
-                zeroLabel: 'None',
-                hint:      $r['away'] > 0 ? "{$r['away']} away today" : 'All present',
+            'available' => MetricPresenter::make(
+                value:    "{$avail} available",
+                severity: $r['away'] > 0 ? 'warning' : 'ok',
+                raw:      $avail,
+                hint:     $r['away'] > 0 ? "{$r['away']} away today" : 'All present',
             ),
-            'critical_users' => StatCard::count(
-                n:         (int) $r['critical_users']['count'],
-                severity:  $r['critical_users']['count'] > 0 ? 'critical' : 'ok',
-                zeroLabel: 'None',
-                hint:      'Criticality ≥ 50',
+            'critical_users' => MetricPresenter::make(
+                value:    "{$crit} at-risk",
+                severity: $crit > 0 ? 'critical' : 'ok',
+                raw:      $crit,
+                hint:     'Criticality ≥ 50',
             ),
-            'unique_skill_holders' => StatCard::count(
-                n:         (int) $r['unique_skill_holders'],
-                severity:  $r['unique_skill_holders'] > 0 ? 'warning' : 'ok',
-                zeroLabel: 'None',
-                hint:      'Sole holders',
-            ),
-            'departments' => StatCard::label(
-                value:    (string) $r['departments']['value'],
-                severity: (string) $r['departments']['severity'],
-                hint:     $r['departments']['insight'] ?? null,
+            'unique_skill_holders' => MetricPresenter::make(
+                value:    "{$unique} " . ($unique === 1 ? 'sole holder' : 'sole holders'),
+                severity: $unique > 0 ? 'warning' : 'ok',
+                raw:      $unique,
+                hint:     'Skill held by one user',
             ),
             'critical_users_preview' => $r['critical_users']['users'],
         ];

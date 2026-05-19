@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,10 +17,10 @@ class ProjectStatsResource extends JsonResource
         $present = (int) $team['total'] - (int) $team['away'];
 
         return [
-            'fragility'  => StatCard::fragility((float) $r['fragility_raw']),
-            'bus_factor' => StatCard::busFactor((int) $r['bus_factor']),
-            'trajectory' => StatCard::trajectory((float) $r['trajectory_raw']),
-            'team'       => StatCard::ratio(
+            'fragility'  => MetricPresenter::fragility((float) $r['fragility_raw']),
+            'bus_factor' => MetricPresenter::busFactor((int) $r['bus_factor']),
+            'trajectory' => MetricPresenter::trajectory((float) $r['trajectory_raw']),
+            'team'       => MetricPresenter::ratio(
                 a:        $present,
                 b:        (int) $team['total'],
                 severity: $team['away'] > 0 ? 'warning' : 'ok',

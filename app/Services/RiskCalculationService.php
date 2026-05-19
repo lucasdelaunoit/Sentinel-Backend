@@ -10,7 +10,7 @@ use App\Models\User;
 class RiskCalculationService
 {
     public function __construct(
-        private readonly SkillCoverageService       $coverage,
+        private readonly SkillCoverageService $coverage,
         private readonly OrganizationSettingService $orgSettings,
     ) {}
 
@@ -53,42 +53,42 @@ class RiskCalculationService
     public function computeFragilityRaw(Project $project, array $absentUserIds = []): float
     {
         $settings = $this->orgSettings->getOrganizationSetting();
-        $matrix   = $this->coverage->getCoverage($project, $absentUserIds);
-        $total    = count($matrix);
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
+        $total = count($matrix);
 
         if ($total === 0) return 0.0;
 
         $uncovered = 0;
-        $siloed    = 0;
+        $siloed = 0;
         foreach ($matrix as $row) {
             if ($row['status'] === 'uncovered') $uncovered++;
             elseif ($row['status'] === 'siloed') $siloed++;
         }
         $uncoveredRatio = $uncovered / $total;
-        $siloRatio      = $siloed / $total;
+        $siloRatio = $siloed / $total;
 
         $absenceImpact = $this->computeAbsenceImpact($project, $matrix, $absentUserIds, $settings);
 
         $busFactor = $this->computeBusFactor($project, $absentUserIds);
-        $busRisk   = $busFactor >= 5 ? 0 : max(0, 100 - $busFactor * 20);
+        $busRisk = $busFactor >= 5 ? 0 : max(0, 100 - $busFactor * 20);
 
-        $wBus  = (int) $settings->fragility_weight_bus_factor;
-        $wUnc  = (int) $settings->fragility_weight_uncovered_skills;
+        $wBus = (int) $settings->fragility_weight_bus_factor;
+        $wUnc = (int) $settings->fragility_weight_uncovered_skills;
         $wSilo = (int) $settings->fragility_weight_silos;
-        $wAbs  = (int) $settings->fragility_weight_absence_impact;
-        $sumW  = max(1, $wBus + $wUnc + $wSilo + $wAbs);
+        $wAbs = (int) $settings->fragility_weight_absence_impact;
+        $sumW = max(1, $wBus + $wUnc + $wSilo + $wAbs);
 
         $fragility = (
-            $busRisk              * $wBus  +
+            $busRisk * $wBus  +
             $uncoveredRatio * 100 * $wUnc  +
-            $siloRatio      * 100 * $wSilo +
-            $absenceImpact  * 100 * $wAbs
+            $siloRatio * 100 * $wSilo +
+            $absenceImpact * 100 * $wAbs
         ) / $sumW;
 
         $tolerance = match ($settings->fragility_tolerance) {
             'conservative' => 1.2,
-            'aggressive'   => 0.8,
-            default        => 1.0,
+            'aggressive' => 0.8,
+            default => 1.0,
         };
 
         $fragility = min(100.0, $fragility * $tolerance);
@@ -109,11 +109,11 @@ class RiskCalculationService
      */
     public function computeTrajectoryRaw(Project $project, array $absentUserIds = []): float
     {
-        $settings  = $this->orgSettings->getOrganizationSetting();
+        $settings = $this->orgSettings->getOrganizationSetting();
         $fragility = $this->computeFragilityRaw($project, $absentUserIds);
-        $progress  = (float) $project->progress;
-        $w         = (int) $settings->trajectory_fragility_weight;
-        $share     = $w / 100;
+        $progress = (float) $project->progress;
+        $w = (int) $settings->trajectory_fragility_weight;
+        $share = $w / 100;
 
         $traj = (100 - $fragility) * $share + $progress * (1 - $share);
         return max(0.0, min(100.0, $traj));
@@ -177,7 +177,7 @@ class RiskCalculationService
             }
         }
 
-        $siloCount         = 0;
+        $siloCount = 0;
         $busFactorProjects = 0;
 
         foreach ($user->projects as $project) {
@@ -207,9 +207,9 @@ class RiskCalculationService
         $score = min(100, $uniqueCount * 25 + $siloCount * 10 + $busFactorProjects * 15);
 
         return [
-            'score'               => $score,
-            'unique_skills'       => $uniqueCount,
-            'silo_count'          => $siloCount,
+            'score' => $score,
+            'unique_skills' => $uniqueCount,
+            'silo_count' => $siloCount,
             'bus_factor_projects' => $busFactorProjects,
         ];
     }
@@ -221,7 +221,7 @@ class RiskCalculationService
             $raw <= 40 => 'stable',
             $raw <= 60 => 'stretched',
             $raw <= 80 => 'fragile',
-            default    => 'critical',
+            default => 'critical',
         };
     }
 
@@ -232,7 +232,7 @@ class RiskCalculationService
             $raw <= 40 => 'drifting',
             $raw <= 60 => 'wobbling',
             $raw <= 80 => 'on_track',
-            default    => 'cruising',
+            default => 'cruising',
         };
     }
 
@@ -247,7 +247,7 @@ class RiskCalculationService
         return match (true) {
             $raw <= 40 => 'ok',
             $raw <= 60 => 'warning',
-            default    => 'critical',
+            default => 'critical',
         };
     }
 
@@ -262,7 +262,7 @@ class RiskCalculationService
         return match (true) {
             $raw <= 40 => 'critical',
             $raw <= 60 => 'warning',
-            default    => 'ok',
+            default => 'ok',
         };
     }
 
@@ -277,7 +277,7 @@ class RiskCalculationService
         return match (true) {
             $score < 30 => 'ok',
             $score < 60 => 'warning',
-            default     => 'critical',
+            default => 'critical',
         };
     }
 
@@ -293,7 +293,7 @@ class RiskCalculationService
         if ($total === 0) return 0.0;
 
         $horizonAbsent = $this->getHorizonAbsentUserIds($project, (int) $settings->absence_horizon_days);
-        $merged        = array_values(array_unique(array_merge($absentUserIds, $horizonAbsent)));
+        $merged = array_values(array_unique(array_merge($absentUserIds, $horizonAbsent)));
 
         if ($merged === $absentUserIds) return 0.0;
 
@@ -316,13 +316,13 @@ class RiskCalculationService
      */
     private function getHorizonAbsentUserIds(Project $project, int $horizonDays): array
     {
-        $today      = now()->toDateString();
+        $today = now()->toDateString();
         $horizonEnd = now()->addDays($horizonDays)->toDateString();
 
         return $project->users()
             ->whereHas('absences', fn($q) => $q
                 ->whereDate('start_date', '<=', $horizonEnd)
-                ->whereDate('end_date',   '>=', $today)
+                ->whereDate('end_date', '>=', $today)
             )
             ->pluck('users.id')
             ->all();
@@ -338,13 +338,13 @@ class RiskCalculationService
     private function computeRulePenalty(Project $project, OrganizationSetting $settings): float
     {
         $ruleService = app(RuleService::class);
-        $rules       = $ruleService->getEnabledRules();
+        $rules = $ruleService->getEnabledRules();
         if ($rules->isEmpty()) return 0.0;
 
         $applicable = $rules->filter(fn($r) => $this->ruleAppliesTo($r, $project));
         if ($applicable->isEmpty()) return 0.0;
 
-        $evaluator    = app(RuleEvaluator::class);
+        $evaluator = app(RuleEvaluator::class);
         $allViolations = $evaluator->evaluateOrganization();
 
         $hit = 0;
@@ -353,7 +353,7 @@ class RiskCalculationService
                 $hit++;
             } elseif ($v['subject_type'] === 'organization') {
                 $ruleId = (int) $v['rule_id'];
-                $rule   = $applicable->firstWhere('id', $ruleId);
+                $rule = $applicable->firstWhere('id', $ruleId);
                 if ($rule) $hit++;
             }
         }
@@ -364,9 +364,9 @@ class RiskCalculationService
     private function ruleAppliesTo($rule, Project $project): bool
     {
         return match ($rule->scope_type) {
-            'project'    => (int) $rule->scope_id === (int) $project->id,
+            'project' => (int) $rule->scope_id === (int) $project->id,
             'department' => $project->users()->where('department_id', $rule->scope_id)->exists(),
-            default      => true,
+            default => true,
         };
     }
 }

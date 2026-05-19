@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,20 +20,20 @@ class UserStatsResource extends JsonResource
         $catCount    = count($skills['by_category']);
 
         return [
-            'criticality' => StatCard::criticality((int) $criticality['score']),
-            'bus_factor_in_org' => StatCard::count(
+            'criticality' => MetricPresenter::criticality((int) $criticality['score']),
+            'bus_factor_in_org' => MetricPresenter::count(
                 n:         (int) $busFactor['count'],
                 severity:  $busFactor['count'] > 0 ? 'critical' : 'ok',
                 zeroLabel: 'Safe',
                 hint:      $busFactor['count'] > 0 ? 'Projects at risk' : 'No single-point exposure',
             ),
-            'skills' => StatCard::count(
+            'skills' => MetricPresenter::count(
                 n:         (int) $skills['total'],
                 severity:  'ok',
                 zeroLabel: 'None',
                 hint:      $catCount > 0 ? "{$catCount} categories" : null,
             ),
-            'active_projects' => StatCard::count(
+            'active_projects' => MetricPresenter::count(
                 n:         (int) $projects['count'],
                 severity:  'ok',
                 zeroLabel: 'None',

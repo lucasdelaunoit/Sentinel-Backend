@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\StatCard;
+use App\Support\MetricPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,23 +20,23 @@ class DashboardStatsResource extends JsonResource
         $ai = $r['absence_impact'];
 
         return [
-            'fragile_projects'   => StatCard::count(
+            'fragile_projects'   => MetricPresenter::count(
                 n:         (int) $fp['value'],
                 severity:  $fp['severity'],
                 zeroLabel: 'Healthy',
                 hint:      $fp['insight'] ?? null,
             ),
-            'knowledge_coverage' => StatCard::percentage(
+            'knowledge_coverage' => MetricPresenter::percentage(
                 pct:  (int) $kc['value'],
                 hint: $kc['insight'] ?? null,
             ),
-            'team_availability'  => StatCard::ratio(
+            'team_availability'  => MetricPresenter::ratio(
                 a:        (int) ($ta['available'] ?? 0),
                 b:        (int) ($ta['total']     ?? 0),
                 severity: $ta['severity'],
                 hint:     $ta['insight'] ?? null,
             ),
-            'absence_impact'     => StatCard::count(
+            'absence_impact'     => MetricPresenter::count(
                 n:         (int) $ai['value'],
                 severity:  $ai['severity'],
                 zeroLabel: 'None',

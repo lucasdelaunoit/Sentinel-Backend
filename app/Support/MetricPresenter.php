@@ -5,8 +5,9 @@ namespace App\Support;
 use App\Services\RiskCalculationService;
 
 /**
- * Stat card builder. Every stats endpoint returns cards in this shape so the
- * frontend can render one component for all of them.
+ * Metric presenter. Shapes a raw domain metric into the standard
+ * display-ready payload consumed by stats endpoints, list rows,
+ * detail views, exports, etc.
  *
  * Shape: { value, severity, change, hint, raw }
  *  - value:    human label ("Good", "On Track", "3 fragile")
@@ -15,7 +16,7 @@ use App\Services\RiskCalculationService;
  *  - hint:     optional one-liner context
  *  - raw:      underlying numeric for tooltip / debug
  */
-class StatCard
+class MetricPresenter
 {
     // TODO(change): real change requires snapshot history. Hardcode until project_metric_snapshots lands.
     public const PLACEHOLDER_CHANGE = 'Stable over 7d';

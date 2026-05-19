@@ -16,7 +16,7 @@ class UserManager
 {
     public function __construct(
         private readonly RiskCalculationService $riskService,
-        private readonly UserService            $userService,
+        private readonly UserService $userService,
     ) {}
 
     /**
