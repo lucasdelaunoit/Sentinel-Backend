@@ -7,6 +7,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Requests\UpdateUserSkillRequest;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\UsersStatsResource;
 use App\Http\Resources\UserStatsResource;
 use App\Managers\UserManager;
 use App\Models\Skill;
@@ -164,6 +165,18 @@ class UserController extends Controller
     public function getUsersTodayStatus(): JsonResponse
     {
         return response()->json($this->userManager->getUsersTodayStatus());
+    }
+
+    /**
+     * <summary>
+     *  Org-wide user stats for the Users page header.
+     * </summary>
+     *
+     * @return JsonResponse total, available, away, critical_users, unique_skill_holders, departments
+     */
+    public function getUsersStats(): UsersStatsResource
+    {
+        return new UsersStatsResource($this->userManager->getUsersStats());
     }
 
     /**

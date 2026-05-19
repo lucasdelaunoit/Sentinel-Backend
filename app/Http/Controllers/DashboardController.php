@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\DashboardStatsResource;
 use App\Managers\DashboardManager;
 use Illuminate\Http\JsonResponse;
 
@@ -11,9 +12,9 @@ class DashboardController extends Controller
         private readonly DashboardManager $dashboardManager
     ) {}
 
-    public function stats(): JsonResponse
+    public function stats(): DashboardStatsResource
     {
-        return response()->json($this->dashboardManager->getTodayStats());
+        return new DashboardStatsResource($this->dashboardManager->getTodayStats());
     }
 
     public function projectsAtRiskDetail(): JsonResponse

@@ -31,7 +31,7 @@ class DashboardManager
 
     public function getProjectsAtRiskDetail(): array
     {
-        $projects = Project::where('status', 'active')
+        $projects = Project::active()
             ->where('fragility_raw', '>', 50)
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->orderByDesc('fragility_raw')
@@ -71,7 +71,7 @@ class DashboardManager
 
     public function getKnowledgeCoverageDetail(): array
     {
-        $projects = Project::where('status', 'active')
+        $projects = Project::active()
             ->with(['skillRequirements.category', 'users.skills', 'users.absences'])
             ->get();
 
@@ -175,7 +175,7 @@ class DashboardManager
         $atRiskProjects = [];
 
         if (!empty($absentIds)) {
-            $activeProjects = Project::where('status', 'active')
+            $activeProjects = Project::active()
                 ->whereHas('users', fn($q) => $q->whereIn('users.id', $absentIds))
                 ->with(['skillRequirements', 'users.skills', 'users.absences'])
                 ->get();
@@ -220,7 +220,7 @@ class DashboardManager
             return ['uncovered_skills' => []];
         }
 
-        $projects = Project::where('status', 'active')
+        $projects = Project::active()
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 
@@ -250,8 +250,8 @@ class DashboardManager
 
     private function fragileProjectsStats(): array
     {
-        $critical = Project::where('status', 'active')->where('fragility_raw', '>', 75)->count();
-        $unstable = Project::where('status', 'active')->whereBetween('fragility_raw', [51, 75])->count();
+        $critical = Project::active()->where('fragility_raw', '>', 75)->count();
+        $unstable = Project::active()->whereBetween('fragility_raw', [51, 75])->count();
         $total    = $critical + $unstable;
 
         $parts = [];
@@ -267,7 +267,7 @@ class DashboardManager
 
     private function knowledgeCoverageStats(): array
     {
-        $projects = Project::where('status', 'active')
+        $projects = Project::active()
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 
@@ -313,7 +313,11 @@ class DashboardManager
             ? DB::table('project_users')
                 ->join('projects', 'project_users.project_id', '=', 'projects.id')
                 ->whereIn('project_users.user_id', $absentIds)
-                ->where('projects.status', 'active')
+                ->whereNotNull('projects.started_at')
+                ->whereDate('projects.started_at', '<=', now())
+                ->whereNull('projects.paused_at')
+                ->whereNull('projects.completed_at')
+                ->whereNull('projects.archived_at')
                 ->where('projects.bus_factor', '<=', 1)
                 ->distinct()
                 ->count('project_users.user_id')
@@ -345,7 +349,7 @@ class DashboardManager
             return ['value' => 0, 'insight' => "No impact from absences", 'severity' => 'ok'];
         }
 
-        $projects = Project::where('status', 'active')
+        $projects = Project::active()
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
             ->get();
 

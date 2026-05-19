@@ -2,6 +2,7 @@
 
 namespace App\Managers;
 
+use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Absence;
 use App\Models\User;
 use App\Services\AbsenceService;
@@ -30,9 +31,7 @@ class AbsenceManager
 
     /**
      * <summary>
-     *  Create a new Absence for a user.
-     *  TODO: dispatch project risk recalculation job for projects the user belongs to
-     *        when the absence range overlaps "today" (so dashboards reflect it immediately).
+     *  Create a new Absence for a user and dispatch risk recalc for the user's projects.
      * </summary>
      *
      * @param User $user Target user the absence belongs to
@@ -41,14 +40,14 @@ class AbsenceManager
      */
     public function createAbsenceForUser(User $user, array $data): Absence
     {
-        return $this->absenceService->createAbsenceForUser($user, $data);
+        $absence = $this->absenceService->createAbsenceForUser($user, $data);
+        $this->dispatchProjectRecalculations($user);
+        return $absence;
     }
 
     /**
      * <summary>
-     *  Update an existing Absence.
-     *  TODO: when start_date/end_date changes such that the "active today" status flips,
-     *        dispatch project risk recalculation for the user's projects.
+     *  Update an existing Absence and dispatch risk recalc for the user's projects.
      * </summary>
      *
      * @param Absence $absence Target absence
@@ -57,14 +56,14 @@ class AbsenceManager
      */
     public function updateAbsence(Absence $absence, array $data): Absence
     {
-        return $this->absenceService->updateAbsence($absence, $data);
+        $fresh = $this->absenceService->updateAbsence($absence, $data);
+        $this->dispatchProjectRecalculations($fresh->user);
+        return $fresh;
     }
 
     /**
      * <summary>
-     *  Soft-delete an Absence.
-     *  TODO: dispatch project risk recalculation for the user's projects when the absence
-     *        was active today (its removal restores coverage).
+     *  Soft-delete an Absence and dispatch risk recalc for the owning user's projects.
      * </summary>
      *
      * @param Absence $absence Target absence to soft-delete
@@ -72,6 +71,17 @@ class AbsenceManager
      */
     public function deleteAbsence(Absence $absence): void
     {
+        $user = $absence->user;
         $this->absenceService->deleteAbsence($absence);
+        if ($user) $this->dispatchProjectRecalculations($user);
+    }
+
+    private function dispatchProjectRecalculations(?User $user): void
+    {
+        if ($user === null) return;
+        $user->loadMissing('projects');
+        foreach ($user->projects as $project) {
+            RecalculateProjectRiskJob::dispatch($project);
+        }
     }
 }

@@ -92,6 +92,8 @@ class ProjectManager
             return $project;
         });
 
+        RecalculateProjectRiskJob::dispatch($project);
+
         return $project->load(['users.department', 'skillRequirements.category']);
     }
 
@@ -120,7 +122,9 @@ class ProjectManager
      */
     public function updateProject(Project $project, array $data): Project
     {
-        return DB::transaction(fn() => $this->projectService->updateProject($project, $data));
+        $fresh = DB::transaction(fn() => $this->projectService->updateProject($project, $data));
+        RecalculateProjectRiskJob::dispatch($fresh);
+        return $fresh;
     }
 
     /**
@@ -244,7 +248,7 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Pause a project inside a transaction. No risk recalculation.
+     *  Pause a project inside a transaction. Dispatches risk recalculation (progress freezes).
      * </summary>
      *
      * @param Project $project Target project
@@ -253,7 +257,9 @@ class ProjectManager
      */
     public function pauseProject(Project $project): Project
     {
-        return DB::transaction(fn() => $this->projectService->pauseProject($project));
+        $fresh = DB::transaction(fn() => $this->projectService->pauseProject($project));
+        RecalculateProjectRiskJob::dispatch($fresh);
+        return $fresh;
     }
 
     /**
@@ -267,7 +273,9 @@ class ProjectManager
      */
     public function resumeProject(Project $project): Project
     {
-        return DB::transaction(fn() => $this->projectService->resumeProject($project));
+        $fresh = DB::transaction(fn() => $this->projectService->resumeProject($project));
+        RecalculateProjectRiskJob::dispatch($fresh);
+        return $fresh;
     }
 
     /**
@@ -281,7 +289,9 @@ class ProjectManager
      */
     public function completeProject(Project $project): Project
     {
-        return DB::transaction(fn() => $this->projectService->completeProject($project));
+        $fresh = DB::transaction(fn() => $this->projectService->completeProject($project));
+        RecalculateProjectRiskJob::dispatch($fresh);
+        return $fresh;
     }
 
     /**
@@ -295,7 +305,9 @@ class ProjectManager
      */
     public function reopenProject(Project $project): Project
     {
-        return DB::transaction(fn() => $this->projectService->reopenProject($project));
+        $fresh = DB::transaction(fn() => $this->projectService->reopenProject($project));
+        RecalculateProjectRiskJob::dispatch($fresh);
+        return $fresh;
     }
 
     /**

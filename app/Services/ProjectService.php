@@ -32,12 +32,20 @@ class ProjectService
         $criticalCount      = (clone $base)->where('fragility_raw', '>', 60)->count();
         $stretchedCount     = (clone $base)->whereBetween('fragility_raw', [41, 60])->count();
 
+        $severity = match (true) {
+            $criticalCount > 0  => 'critical',
+            $stretchedCount > 0 => 'warning',
+            default             => 'ok',
+        };
+
         return [
             'total'              => $total,
             'avg_trajectory_raw' => $avgTrajectoryRaw,
             'avg_trajectory'     => RiskCalculationService::trajectoryTier($avgTrajectoryRaw),
+            'avg_trajectory_severity' => RiskCalculationService::trajectorySeverity($avgTrajectoryRaw),
             'critical_count'     => $criticalCount,
             'stretched_count'    => $stretchedCount,
+            'severity'           => $severity,
         ];
     }
 
@@ -66,12 +74,14 @@ class ProjectService
         $trajectoryRaw = (int) $project->trajectory_raw;
 
         return [
-            'fragility_raw'  => $fragilityRaw,
-            'fragility'      => RiskCalculationService::fragilityTier($fragilityRaw),
-            'bus_factor'     => (int) $project->bus_factor,
-            'trajectory_raw' => $trajectoryRaw,
-            'trajectory'     => RiskCalculationService::trajectoryTier($trajectoryRaw),
-            'team'           => [
+            'fragility_raw'      => $fragilityRaw,
+            'fragility'          => RiskCalculationService::fragilityTier($fragilityRaw),
+            'fragility_severity' => RiskCalculationService::fragilitySeverity($fragilityRaw),
+            'bus_factor'         => (int) $project->bus_factor,
+            'trajectory_raw'      => $trajectoryRaw,
+            'trajectory'          => RiskCalculationService::trajectoryTier($trajectoryRaw),
+            'trajectory_severity' => RiskCalculationService::trajectorySeverity($trajectoryRaw),
+            'team' => [
                 'total' => $total,
                 'away'  => $away,
             ],

@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /** ---------------------- [ USERS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
+    Route::get('/users/stats', [UserController::class, 'getUsersStats']);
     Route::get('/users/today', [UserController::class, 'getUsersTodayStatus']);
 
     /* ----------------- COMMON ENDPOINTS ----------------- */

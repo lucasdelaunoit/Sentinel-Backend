@@ -2,7 +2,9 @@
 
 namespace App\Managers;
 
+use App\Jobs\RecalculateProjectRiskJob;
 use App\Jobs\RefreshRuleViolationsJob;
+use App\Models\Project;
 use App\Models\Rule;
 use App\Models\Simulation;
 use App\Services\RuleEvaluator;
@@ -49,6 +51,7 @@ class RuleManager
     {
         $rule = DB::transaction(fn() => $this->ruleService->createRule($data));
         RefreshRuleViolationsJob::dispatch();
+        $this->dispatchRecalcForRuleScope($rule);
         return $rule;
     }
 
@@ -66,6 +69,7 @@ class RuleManager
     {
         $rule = DB::transaction(fn() => $this->ruleService->updateRule($rule, $data));
         RefreshRuleViolationsJob::dispatch();
+        $this->dispatchRecalcForRuleScope($rule);
         return $rule;
     }
 
@@ -80,8 +84,30 @@ class RuleManager
      */
     public function deleteRule(Rule $rule): void
     {
+        $snapshot = clone $rule;
         DB::transaction(fn() => $this->ruleService->deleteRule($rule));
         RefreshRuleViolationsJob::dispatch();
+        $this->dispatchRecalcForRuleScope($snapshot);
+    }
+
+    /**
+     * <summary>
+     *  Dispatch RecalculateProjectRiskJob for projects affected by the rule's scope.
+     *  Scope project -&gt; that single project. Scope department -&gt; projects with any user in dept.
+     *  Scope organization (or null) -&gt; all non-archived projects.
+     * </summary>
+     */
+    private function dispatchRecalcForRuleScope(Rule $rule): void
+    {
+        $query = Project::query()->whereNull('archived_at');
+
+        match ($rule->scope_type) {
+            'project'    => $query->where('id', $rule->scope_id),
+            'department' => $query->whereHas('users', fn($q) => $q->where('department_id', $rule->scope_id)),
+            default      => null,
+        };
+
+        $query->get(['id'])->each(fn(Project $p) => RecalculateProjectRiskJob::dispatch($p));
     }
 
     /**

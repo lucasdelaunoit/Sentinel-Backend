@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\StatCard;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,12 +12,28 @@ class ProjectsStatsResource extends JsonResource
 
     public function toArray(Request $request): array
     {
+        $r = $this->resource;
+
         return [
-            'total'              => $this->resource['total'],
-            'avg_trajectory_raw' => $this->resource['avg_trajectory_raw'],
-            'avg_trajectory'     => $this->resource['avg_trajectory'],
-            'critical_count'     => $this->resource['critical_count'],
-            'stretched_count'    => $this->resource['stretched_count'],
+            'total' => StatCard::count(
+                n:        (int) $r['total'],
+                singular: 'active project',
+                plural:   'active projects',
+                severity: 'ok',
+            ),
+            'avg_trajectory' => StatCard::trajectory((int) $r['avg_trajectory_raw']),
+            'fragile_count'  => StatCard::count(
+                n:        (int) $r['critical_count'],
+                singular: 'fragile project',
+                plural:   'fragile projects',
+                severity: $r['critical_count'] > 0 ? 'critical' : 'ok',
+            ),
+            'stretched_count' => StatCard::count(
+                n:        (int) $r['stretched_count'],
+                singular: 'stretched project',
+                plural:   'stretched projects',
+                severity: $r['stretched_count'] > 0 ? 'warning' : 'ok',
+            ),
         ];
     }
 }

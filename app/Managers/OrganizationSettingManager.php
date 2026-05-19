@@ -2,7 +2,9 @@
 
 namespace App\Managers;
 
+use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\OrganizationSetting;
+use App\Models\Project;
 use App\Services\OrganizationSettingService;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -36,6 +38,12 @@ class OrganizationSettingManager
      */
     public function updateOrganizationSetting(array $data): OrganizationSetting
     {
-        return DB::transaction(fn() => $this->organizationSettingService->updateOrganizationSetting($data));
+        $setting = DB::transaction(fn() => $this->organizationSettingService->updateOrganizationSetting($data));
+
+        Project::query()->whereNull('archived_at')->get(['id'])->each(
+            fn(Project $p) => RecalculateProjectRiskJob::dispatch($p)
+        );
+
+        return $setting;
     }
 }

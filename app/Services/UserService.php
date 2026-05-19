@@ -243,6 +243,46 @@ class UserService
         ];
     }
 
+    /**
+     * <summary>
+     *  Org-wide aggregate user stats used by GET /users/stats.
+     *  Returns headcount + today availability + unique-skill-holder count.
+     *  Critical-user count and avg criticality are computed in the Manager
+     *  (require RiskCalculationService).
+     * </summary>
+     *
+     * @return array total, available, away, unique_skill_holders, departments
+     */
+    public function getOrgUserStats(): array
+    {
+        $today = now()->toDateString();
+
+        $total = User::count();
+        $away  = User::whereHas('absences', fn($q) => $q
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date',   '>=', $today)
+        )->count();
+
+        $uniqueHolders = User::query()
+            ->whereHas('skills', function ($q) {
+                $q->whereIn('skills.id', function ($sub) {
+                    $sub->from('user_skills')
+                        ->select('skill_id')
+                        ->groupBy('skill_id')
+                        ->havingRaw('count(distinct user_id) = 1');
+                });
+            })
+            ->count();
+
+        return [
+            'total'                => $total,
+            'available'            => $total - $away,
+            'away'                 => $away,
+            'unique_skill_holders' => $uniqueHolders,
+            'departments'          => $this->getDepartmentBalanceStat(),
+        ];
+    }
+
     private function resolveUserStatus(User $user): UserStatus
     {
         return $user->absences->isNotEmpty() ? UserStatus::Away : UserStatus::Available;

@@ -174,12 +174,58 @@ class UserManager
      * @param User $user Route-model bound user
      * @return array criticality, bus_factor_in_org, skills, active_projects
      */
+    /**
+     * <summary>
+     *  Org-wide user stats: headcount, today availability, critical users (criticality &gt; threshold),
+     *  unique skill holders, department balance.
+     *  Composite — combines UserService aggregates with per-user criticality from RiskCalculationService.
+     * </summary>
+     *
+     * @return array total, available, away, critical_users{count, users}, unique_skill_holders, departments
+     */
+    public function getUsersStats(): array
+    {
+        $base = $this->userService->getOrgUserStats();
+
+        $criticalUsers = User::with(['skills', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences'])
+            ->get()
+            ->map(fn(User $u) => [
+                'user'        => $u,
+                'criticality' => $this->riskService->computeUserCriticality($u),
+            ])
+            ->filter(fn(array $row) => $row['criticality']['score'] >= 50)
+            ->sortByDesc(fn(array $row) => $row['criticality']['score'])
+            ->values();
+
+        $criticalCount = $criticalUsers->count();
+
+        return array_merge($base, [
+            'critical_users' => [
+                'count'    => $criticalCount,
+                'severity' => $criticalCount > 0 ? 'critical' : 'ok',
+                'users'    => $criticalUsers->take(10)->map(fn(array $row) => [
+                    'id'       => $row['user']->id,
+                    'name'     => trim(($row['user']->firstname ?? '') . ' ' . ($row['user']->lastname ?? '')),
+                    'title'    => $row['user']->title,
+                    'score'    => $row['criticality']['score'],
+                    'severity' => RiskCalculationService::criticalitySeverity($row['criticality']['score']),
+                ])->all(),
+            ],
+        ]);
+    }
+
     public function getUserStats(User $user): array
     {
         $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences']);
 
         $criticality = $this->riskService->computeUserCriticality($user);
-        $activeProjects = $user->projects->where('status', 'active');
+        $activeProjects = $user->projects->filter(
+            fn($p) => $p->started_at !== null
+                && $p->started_at <= now()
+                && $p->paused_at === null
+                && $p->completed_at === null
+                && $p->archived_at === null
+        );
 
         $busFactorProjects = $activeProjects->filter(
             fn($p) => $this->riskService->computeBusFactor($p) <= 2
@@ -195,7 +241,9 @@ class UserManager
             ->values();
 
         return [
-            'criticality' => $criticality,
+            'criticality' => array_merge($criticality, [
+                'severity' => RiskCalculationService::criticalitySeverity($criticality['score']),
+            ]),
             'bus_factor_in_org' => [
                 'count' => $busFactorProjects->count(),
                 'projects' => $busFactorProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
