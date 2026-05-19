@@ -5,8 +5,8 @@ namespace App\Enums;
 enum RuleScope: string
 {
     case Organization = 'organization';
-    case Project      = 'project';
-    case Department   = 'department';
+    case Project = 'project';
+    case Department = 'department';
 
     /** @return string[] */
     public static function values(): array

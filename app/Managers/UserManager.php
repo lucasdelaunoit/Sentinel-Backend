@@ -209,7 +209,7 @@ class UserManager
                     'name'     => trim(($row['user']->firstname ?? '') . ' ' . ($row['user']->lastname ?? '')),
                     'title'    => $row['user']->title,
                     'score'    => $row['criticality']['score'],
-                    'severity' => CriticalityScale::fromRaw($row['criticality']['score'])->severity(),
+                    'severity' => CriticalityScale::fromRaw($row['criticality']['score'])->severity()->value,
                 ])->all(),
             ],
         ]);
@@ -243,7 +243,7 @@ class UserManager
 
         return [
             'criticality' => array_merge($criticality, [
-                'severity' => CriticalityScale::fromRaw($criticality['score'])->severity(),
+                'severity' => CriticalityScale::fromRaw($criticality['score'])->severity()->value,
             ]),
             'bus_factor_in_org' => [
                 'count' => $busFactorProjects->count(),

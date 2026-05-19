@@ -2,12 +2,20 @@
 
 namespace App\Managers;
 
+use App\Metrics\AbsenceImpactScale;
+use App\Metrics\Calculators\AbsenceImpactCalculator;
+use App\Metrics\Calculators\FragilityCalculator;
+use App\Metrics\Calculators\KnowledgeCoverageCalculator;
+use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\FragilityScale;
+use App\Metrics\KnowledgeCoverageScale;
+use App\Metrics\TeamAvailabilityScale;
 use App\Models\Project;
 use App\Models\SkillCategory;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
+use App\Support\Stat;
 
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -18,15 +26,22 @@ class DashboardManager
     public function __construct(
         private readonly SkillCoverageService $coverageService,
         private readonly RiskCalculationService $riskCalculationService,
+        private readonly FragilityCalculator $fragilityCalculator,
+        private readonly KnowledgeCoverageCalculator $knowledgeCoverageCalculator,
+        private readonly TeamAvailabilityCalculator $teamAvailabilityCalculator,
+        private readonly AbsenceImpactCalculator $absenceImpactCalculator,
     ) {}
 
+    /**
+     * @return array<string, Stat>
+     */
     public function getTodayStats(): array
     {
         return [
-            'fragile_projects'   => $this->fragileProjectsStats(),
-            'knowledge_coverage' => $this->knowledgeCoverageStats(),
-            'team_availability'  => $this->teamAvailabilityStats(),
-            'absence_impact'     => $this->absenceImpactStats(),
+            'fragile_projects' => $this->fragileProjectsStat(),
+            'knowledge_coverage' => $this->knowledgeCoverageStat(),
+            'team_availability' => $this->teamAvailabilityStat(),
+            'absence_impact' => $this->absenceImpactStat(),
         ];
     }
 
@@ -247,132 +262,61 @@ class DashboardManager
         return ['uncovered_skills' => $uncoveredSkills];
     }
 
-    private function fragileProjectsStats(): array
+    /**
+     * <summary>
+     *  Headline fragility — worst active project's fragility score 0-100.
+     *  Value label comes from FragilityScale tier; insight summarises tier counts.
+     * </summary>
+     */
+    private function fragileProjectsStat(): Stat
     {
-        $fragile   = Project::active()->where('fragility_raw', '>', 60)->count();
-        $stretched = Project::active()->whereBetween('fragility_raw', [41, 60])->count();
-
-        $parts = [];
-        if ($fragile   > 0) $parts[] = "{$fragile} fragile";
-        if ($stretched > 0) $parts[] = "{$stretched} stretched";
-
-        return [
-            'value'    => $fragile,
-            'insight'  => empty($parts) ? "All projects healthy" : implode(' · ', $parts),
-            'severity' => $fragile > 0 ? 'critical' : ($stretched > 0 ? 'warning' : 'ok'),
-        ];
+        $r = $this->fragilityCalculator->compute();
+        return Stat::fromScale(FragilityScale::fromRaw($r['raw']), $r['raw'], $r['insight']);
     }
 
-    private function knowledgeCoverageStats(): array
+    /**
+     * <summary>
+     *  Org-wide knowledge coverage — % of required skills that are 'safe'.
+     *  Displayed as "{pct}%"; tier severity from KnowledgeCoverageScale.
+     * </summary>
+     */
+    private function knowledgeCoverageStat(): Stat
     {
-        $projects = Project::active()
-            ->with(['skillRequirements', 'users.skills', 'users.absences'])
-            ->get();
-
-        $total        = 0;
-        $safe         = 0;
-        $underCovered = 0;
-
-        foreach ($projects as $project) {
-            foreach ($this->coverageService->getCoverage($project) as $skill) {
-                $total++;
-                if ($skill['status'] === 'safe') {
-                    $safe++;
-                } else {
-                    $underCovered++;
-                }
-            }
-        }
-
-        $pct = $total > 0 ? (int) round(($safe / $total) * 100) : 100;
-
-        return [
-            'value'    => $pct,
-            'insight'  => $underCovered > 0
-                ? "{$underCovered} skill" . ($underCovered > 1 ? 's' : '') . " under-covered"
-                : "All skills covered",
-            'severity' => $pct < 50 ? 'critical' : ($pct < 75 ? 'warning' : 'ok'),
-        ];
+        $r = $this->knowledgeCoverageCalculator->compute();
+        return Stat::display(
+            "{$r['raw']}%",
+            $r['raw'],
+            KnowledgeCoverageScale::fromRaw($r['raw']),
+            $r['insight'],
+        );
     }
 
-    private function teamAvailabilityStats(): array
+    /**
+     * <summary>
+     *  Headcount available today — displayed as "{available}/{total}".
+     *  Severity derives from critical-absence presence via TeamAvailabilityScale.
+     * </summary>
+     */
+    private function teamAvailabilityStat(): Stat
     {
-        $today = Carbon::today();
-        $total = User::count();
-
-        $absentIds = User::whereHas('absences', fn($q) =>
-            $q->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)
-        )->pluck('id');
-
-        $absentCount = $absentIds->count();
-        $available   = $total - $absentCount;
-
-        $criticalCount = $absentCount > 0
-            ? DB::table('project_users')
-                ->join('projects', 'project_users.project_id', '=', 'projects.id')
-                ->whereIn('project_users.user_id', $absentIds)
-                ->whereNotNull('projects.started_at')
-                ->whereDate('projects.started_at', '<=', now())
-                ->whereNull('projects.paused_at')
-                ->whereNull('projects.completed_at')
-                ->whereNull('projects.archived_at')
-                ->where('projects.bus_factor', '<=', 1)
-                ->distinct()
-                ->count('project_users.user_id')
-            : 0;
-
-        $insight = match (true) {
-            $criticalCount > 0 => "{$criticalCount} critical employee" . ($criticalCount > 1 ? 's' : '') . " absent",
-            $absentCount > 0   => "{$absentCount} employee" . ($absentCount > 1 ? 's' : '') . " absent",
-            default            => "Fully operational",
-        };
-
-        return [
-            'value'     => "{$available}/{$total}",
-            'available' => $available,
-            'total'     => $total,
-            'insight'   => $insight,
-            'severity'  => $criticalCount > 0 ? 'critical' : ($absentCount > 0 ? 'warning' : 'ok'),
-        ];
+        $r = $this->teamAvailabilityCalculator->compute();
+        return Stat::display(
+            "{$r['available']}/{$r['total']}",
+            $r['available'],
+            TeamAvailabilityScale::fromCounts($r['absent'], $r['critical_absent']),
+            $r['insight'],
+        );
     }
 
-    private function absenceImpactStats(): array
+    /**
+     * <summary>
+     *  Count of skills newly uncovered because of today's absences.
+     *  Tier label from AbsenceImpactScale.
+     * </summary>
+     */
+    private function absenceImpactStat(): Stat
     {
-        $today     = Carbon::today();
-        $absentIds = User::whereHas('absences', fn($q) =>
-            $q->whereDate('start_date', '<=', $today)->whereDate('end_date', '>=', $today)
-        )->pluck('id')->all();
-
-        if (empty($absentIds)) {
-            return ['value' => 0, 'insight' => "No impact from absences", 'severity' => 'ok'];
-        }
-
-        $projects = Project::active()
-            ->with(['skillRequirements', 'users.skills', 'users.absences'])
-            ->get();
-
-        $count = 0;
-
-        foreach ($projects as $project) {
-            $baseline    = $this->coverageService->getCoverage($project);
-            $withAbsence = $this->coverageService->getCoverageAfterAbsence($project, $absentIds);
-
-            foreach ($withAbsence as $skillId => $simSkill) {
-                if (
-                    $simSkill['status'] === 'uncovered' &&
-                    ($baseline[$skillId]['status'] ?? 'uncovered') !== 'uncovered'
-                ) {
-                    $count++;
-                }
-            }
-        }
-
-        return [
-            'value'    => $count,
-            'insight'  => $count > 0
-                ? "skill" . ($count > 1 ? 's' : '') . " became uncovered"
-                : "No impact from absences",
-            'severity' => $count > 0 ? 'critical' : 'ok',
-        ];
+        $r = $this->absenceImpactCalculator->compute();
+        return Stat::fromScale(AbsenceImpactScale::fromRaw($r['raw']), $r['raw'], $r['insight']);
     }
 }

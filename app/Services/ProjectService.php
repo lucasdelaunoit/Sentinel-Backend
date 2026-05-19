@@ -42,7 +42,7 @@ class ProjectService
             'total'                  => $total,
             'avg_fragility_raw'      => $avgFragilityRaw,
             'avg_fragility'          => FragilityScale::fromRaw($avgFragilityRaw)->value,
-            'avg_fragility_severity' => FragilityScale::fromRaw($avgFragilityRaw)->severity(),
+            'avg_fragility_severity' => FragilityScale::fromRaw($avgFragilityRaw)->severity()->value,
             'critical_count'         => $criticalCount,
             'stretched_count'        => $stretchedCount,
             'severity'               => $severity,
@@ -75,7 +75,7 @@ class ProjectService
         return [
             'fragility_raw'      => $fragilityRaw,
             'fragility'          => FragilityScale::fromRaw($fragilityRaw)->value,
-            'fragility_severity' => FragilityScale::fromRaw($fragilityRaw)->severity(),
+            'fragility_severity' => FragilityScale::fromRaw($fragilityRaw)->severity()->value,
             'bus_factor'         => (int) $project->bus_factor,
             'team' => [
                 'total' => $total,

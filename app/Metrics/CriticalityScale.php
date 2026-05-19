@@ -30,12 +30,12 @@ enum CriticalityScale: string implements Scale
         };
     }
 
-    public function severity(): string
+    public function severity(): Severity
     {
         return match ($this) {
-            self::LowRisk  => 'ok',
-            self::Notable  => 'warning',
-            self::Critical => 'critical',
+            self::LowRisk  => Severity::OK,
+            self::Notable  => Severity::WARNING,
+            self::Critical => Severity::CRITICAL,
         };
     }
 }

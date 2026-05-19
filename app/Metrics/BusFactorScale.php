@@ -36,12 +36,12 @@ enum BusFactorScale: string implements Scale
         };
     }
 
-    public function severity(): string
+    public function severity(): Severity
     {
         return match ($this) {
-            self::NoCoverage, self::SinglePoint => 'critical',
-            self::Thin                          => 'warning',
-            self::Adequate, self::Resilient     => 'ok',
+            self::NoCoverage, self::SinglePoint => Severity::CRITICAL,
+            self::Thin                          => Severity::WARNING,
+            self::Adequate, self::Resilient     => Severity::OK,
         };
     }
 }
