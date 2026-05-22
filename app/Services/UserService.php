@@ -7,7 +7,6 @@ use App\Metrics\CriticalityScale;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Metrics\TeamAvailabilityScale;
-use App\Models\Department;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -186,10 +185,10 @@ class UserService
             ->orderBy('firstname')
             ->get()
             ->map(fn($user) => [
-                'id'           => $user->id,
-                'name'         => $user->firstname . ' ' . $user->lastname,
-                'role'         => $user->title,
-                'initials'     => $this->deriveInitials($user->firstname . ' ' . $user->lastname),
+                'id' => $user->id,
+                'name' => $user->firstname . ' ' . $user->lastname,
+                'role' => $user->title,
+                'initials' => $this->deriveInitials($user->firstname . ' ' . $user->lastname),
                 'today_status' => $this->resolveUserStatus($user)->value,
             ]);
     }
@@ -358,6 +357,20 @@ class UserService
             TeamAvailabilityScale::fromCounts($absent, $criticalAbsent),
             $insight,
         );
+    }
+
+    /**
+     * <summary>
+     *  Return the full criticality breakdown for a user (raw score + silo_count + bus_factor_contributions).
+     *  Used by GET /users/{user}/criticality. Stat-shaped form is built by getUserCriticalityStat.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return array Criticality breakdown
+     */
+    public function getUserCriticality(User $user): array
+    {
+        return $this->riskService->computeUserCriticality($user);
     }
 
     /**

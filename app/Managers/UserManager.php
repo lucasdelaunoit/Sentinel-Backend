@@ -7,7 +7,6 @@ use App\DTO\Stats\UsersStats;
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\User;
-use App\Services\RiskCalculationService;
 use App\Services\UserService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -17,7 +16,6 @@ use Throwable;
 class UserManager
 {
     public function __construct(
-        private readonly RiskCalculationService $riskService,
         private readonly UserService $userService,
     ) {}
 
@@ -140,7 +138,7 @@ class UserManager
      */
     public function getUserCriticality(User $user): array
     {
-        return $this->riskService->computeUserCriticality($user);
+        return $this->userService->getUserCriticality($user);
     }
 
     /**

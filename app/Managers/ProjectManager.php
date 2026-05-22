@@ -180,10 +180,10 @@ class ProjectManager
         $fragilityRaw = $this->riskService->computeFragilityRaw($project);
 
         return [
-            'bus_factor'     => $this->riskService->computeBusFactor($project),
-            'fragility_raw'  => $fragilityRaw,
-            'fragility'      => FragilityScale::fromRaw($fragilityRaw)->value,
-            'redundancy'     => $this->coverageService->getRedundancy($project),
+            'bus_factor' => $this->riskService->computeBusFactor($project),
+            'fragility_raw' => $fragilityRaw,
+            'fragility' => FragilityScale::fromRaw($fragilityRaw)->value,
+            'redundancy' => $this->coverageService->getRedundancy($project),
         ];
     }
 
