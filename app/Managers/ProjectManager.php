@@ -6,7 +6,10 @@ use App\DTO\Stats\ProjectsStats;
 use App\DTO\Stats\ProjectStats;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\FragilityScale;
+use App\Metrics\MetricKey;
+use App\Metrics\MetricScope;
 use App\Models\Project;
+use App\Services\MetricSnapshotService;
 use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
@@ -21,7 +24,35 @@ class ProjectManager
         private readonly SkillCoverageService $coverageService,
         private readonly RiskCalculationService $riskService,
         private readonly ProjectService $projectService,
+        private readonly MetricSnapshotService $snapshotService,
     ) {}
+
+    /**
+     * <summary>
+     *  Capture point-in-time metric snapshots for a project — currently fragility + bus_factor.
+     *  One snapshot row per metric. Called by the observer (on column change) and the daily cron.
+     *  Stats are sourced from ProjectService builders so the wire shape stays consistent with the live read.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return void
+     */
+    public function captureProjectSnapshots(Project $project): void
+    {
+        $this->snapshotService->captureSnapshot(
+            MetricScope::Project,
+            $project->id,
+            MetricKey::Fragility,
+            $this->projectService->getProjectFragilityStat($project),
+        );
+
+        $this->snapshotService->captureSnapshot(
+            MetricScope::Project,
+            $project->id,
+            MetricKey::BusFactor,
+            $this->projectService->getProjectBusFactorStat($project),
+        );
+    }
 
     /**
      * <summary>
