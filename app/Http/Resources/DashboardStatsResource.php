@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\Stat;
+use App\DTO\Stats\DashboardStats;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +12,9 @@ class DashboardStatsResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        return array_map(fn(Stat $s) => $s->toArray(), $this->resource);
+        /** @var DashboardStats $stats */
+        $stats = $this->resource;
+
+        return $stats->toArray();
     }
 }

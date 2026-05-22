@@ -2,13 +2,14 @@
 
 namespace App\Managers;
 
+use App\DTO\Stats\ProjectsStats;
+use App\DTO\Stats\ProjectStats;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\FragilityScale;
 use App\Models\Project;
 use App\Services\ProjectService;
 use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
-
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -24,27 +25,38 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Aggregate project-wide stats: total, avg_fragility_raw + tier, critical_count, stretched_count.
+     *  Assemble the typed ProjectsStats DTO for GET /projects/stats.
+     *  Orchestrates ProjectService — one Service call per metric.
      * </summary>
      *
-     * @return array total, avg_fragility_raw, avg_fragility, critical_count, stretched_count
+     * @return ProjectsStats total, avg_fragility, fragile_count, stretched_count
      */
-    public function getProjectsStats(): array
+    public function getProjectsStats(): ProjectsStats
     {
-        return $this->projectService->getProjectsStats();
+        return new ProjectsStats(
+            total: $this->projectService->getProjectsTotalStat(),
+            avgFragility: $this->projectService->getProjectsAvgFragilityStat(),
+            fragileCount: $this->projectService->getProjectsFragileCountStat(),
+            stretchedCount: $this->projectService->getProjectsStretchedCountStat(),
+        );
     }
 
     /**
      * <summary>
-     *  Assemble per-project stats card payload: fragility_raw + tier, bus_factor, team.
+     *  Assemble the typed ProjectStats DTO for GET /projects/{project}/stats.
+     *  Orchestrates ProjectService — one Service call per metric.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array fragility_raw, fragility, bus_factor, team{total, away}
+     * @return ProjectStats fragility, bus_factor, team
      */
-    public function getProjectStats(Project $project): array
+    public function getProjectStats(Project $project): ProjectStats
     {
-        return $this->projectService->getProjectStats($project);
+        return new ProjectStats(
+            fragility: $this->projectService->getProjectFragilityStat($project),
+            busFactor: $this->projectService->getProjectBusFactorStat($project),
+            team: $this->projectService->getProjectTeamStat($project),
+        );
     }
 
     /**

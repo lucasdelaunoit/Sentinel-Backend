@@ -1,13 +1,21 @@
 <?php
 
-namespace App\Support;
-
-use App\Metrics\Scale;
-use App\Metrics\Severity;
+namespace App\Metrics;
 
 /**
- * Single shape returned by Manager for every dashboard / KPI stat.
- * Resource layer just calls toArray() — no formatting work in the Resource.
+ * Single, immutable shape for every metric value shipped over the wire.
+ *
+ * Wire shape (matches the contract every /stats route follows):
+ *   {
+ *     "value":     "Healthy",   // display label
+ *     "value_raw": 98,          // numeric form for tooltips / math
+ *     "insight":   "Doing well",// optional context one-liner
+ *     "severity":  "ok"         // ok | warning | critical (drives traffic light)
+ *   }
+ *
+ * Lives under App\Metrics because it composes a Scale + a Severity — the
+ * two enums it depends on. Resource layer never builds a Stat; it just
+ * receives a typed DTO (DashboardStats, UserStats, ...) and serializes.
  */
 final readonly class Stat
 {

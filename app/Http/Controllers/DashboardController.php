@@ -9,12 +9,23 @@ use Illuminate\Http\JsonResponse;
 class DashboardController extends Controller
 {
     public function __construct(
-        private readonly DashboardManager $dashboardManager
+        private readonly DashboardManager $dashboardManager,
     ) {}
 
-    public function stats(): DashboardStatsResource
+    /**
+     * <summary>
+     *  Dashboard headline stats — fragile_projects, knowledge_coverage, team_availability, absence_impact.
+     * </summary>
+     *
+     * @return DashboardStatsResource Typed DashboardStats DTO serialized as 4 Stat blocks
+     */
+    public function getDashboardStats(): DashboardStatsResource
     {
-        return new DashboardStatsResource($this->dashboardManager->getTodayStats());
+        // Act (Manager)
+        $stats = $this->dashboardManager->getTodayStats();
+
+        // Return (Controller)
+        return new DashboardStatsResource($stats);
     }
 
     public function projectsAtRiskDetail(): JsonResponse

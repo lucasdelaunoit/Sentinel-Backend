@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Support\MetricPresenter;
+use App\DTO\Stats\ProjectStats;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,19 +12,9 @@ class ProjectStatsResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        $r       = $this->resource;
-        $team    = $r['team'];
-        $present = (int) $team['total'] - (int) $team['away'];
+        /** @var ProjectStats $stats */
+        $stats = $this->resource;
 
-        return [
-            'fragility'  => MetricPresenter::fragility((float) $r['fragility_raw']),
-            'bus_factor' => MetricPresenter::busFactor((int) $r['bus_factor']),
-            'team'       => MetricPresenter::ratio(
-                a:        $present,
-                b:        (int) $team['total'],
-                severity: $team['away'] > 0 ? 'warning' : 'ok',
-                hint:     $team['away'] > 0 ? "{$team['away']} away today" : 'Full team',
-            ),
-        ];
+        return $stats->toArray();
     }
 }

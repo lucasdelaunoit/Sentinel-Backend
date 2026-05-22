@@ -2,9 +2,10 @@
 
 namespace App\Managers;
 
+use App\DTO\Stats\UserStats;
+use App\DTO\Stats\UsersStats;
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
-use App\Metrics\CriticalityScale;
 use App\Models\User;
 use App\Services\RiskCalculationService;
 use App\Services\UserService;
@@ -55,6 +56,7 @@ class UserManager
      * @param User  $user Route-model bound user
      * @param array $data Validated fields to update
      * @return User Updated user with department relation
+     * @throws Throwable
      */
     public function updateUser(User $user, array $data): User
     {
@@ -68,6 +70,7 @@ class UserManager
      *
      * @param User $user Route-model bound user
      * @return void
+     * @throws Throwable
      */
     public function deleteUser(User $user): void
     {
@@ -83,6 +86,7 @@ class UserManager
      * @param int  $skillId Target skill ID
      * @param int  $level   Proficiency level (1–5)
      * @return void
+     * @throws Throwable
      */
     public function attachSkillToUser(User $user, int $skillId, int $level): void
     {
@@ -100,6 +104,7 @@ class UserManager
      * @param int  $skillId Target skill ID
      * @param int  $level   New proficiency level (1–5)
      * @return void
+     * @throws Throwable
      */
     public function updateUserSkill(User $user, int $skillId, int $level): void
     {
@@ -116,6 +121,7 @@ class UserManager
      * @param User $user    Route-model bound user
      * @param int  $skillId Target skill ID
      * @return void
+     * @throws Throwable
      */
     public function detachSkillFromUser(User $user, int $skillId): void
     {
@@ -169,95 +175,39 @@ class UserManager
 
     /**
      * <summary>
-     *  Assemble per-user stats: criticality score, bus-factor exposure, skill distribution, active projects.
+     *  Assemble the typed UsersStats DTO for GET /users/stats.
+     *  Orchestrates UserService — one Service call per metric.
+     * </summary>
+     *
+     * @return UsersStats total, available, critical_users, unique_skill_holders
+     */
+    public function getUsersStats(): UsersStats
+    {
+        return new UsersStats(
+            total: $this->userService->getUsersTotalStat(),
+            available: $this->userService->getUsersAvailableStat(),
+            criticalUsers: $this->userService->getCriticalUsersStat(),
+            uniqueSkillHolders: $this->userService->getUniqueSkillHoldersStat(),
+        );
+    }
+
+    /**
+     * <summary>
+     *  Assemble the typed UserStats DTO for GET /users/{user}/stats.
+     *  Orchestrates UserService — one Service call per metric.
      * </summary>
      *
      * @param User $user Route-model bound user
-     * @return array criticality, bus_factor_in_org, skills, active_projects
+     * @return UserStats criticality, bus_factor_in_org, skills, active_projects
      */
-    /**
-     * <summary>
-     *  Org-wide user stats: headcount, today availability, critical users (criticality &gt; threshold),
-     *  unique skill holders, department balance.
-     *  Composite — combines UserService aggregates with per-user criticality from RiskCalculationService.
-     * </summary>
-     *
-     * @return array total, available, away, critical_users{count, users}, unique_skill_holders, departments
-     */
-    public function getUsersStats(): array
+    public function getUserStats(User $user): UserStats
     {
-        $base = $this->userService->getOrgUserStats();
-
-        $criticalUsers = User::with(['skills', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences'])
-            ->get()
-            ->map(fn(User $u) => [
-                'user'        => $u,
-                'criticality' => $this->riskService->computeUserCriticality($u),
-            ])
-            ->filter(fn(array $row) => $row['criticality']['score'] >= 50)
-            ->sortByDesc(fn(array $row) => $row['criticality']['score'])
-            ->values();
-
-        $criticalCount = $criticalUsers->count();
-
-        return array_merge($base, [
-            'critical_users' => [
-                'count'    => $criticalCount,
-                'severity' => $criticalCount > 0 ? 'critical' : 'ok',
-                'users'    => $criticalUsers->take(10)->map(fn(array $row) => [
-                    'id'       => $row['user']->id,
-                    'name'     => trim(($row['user']->firstname ?? '') . ' ' . ($row['user']->lastname ?? '')),
-                    'title'    => $row['user']->title,
-                    'score'    => $row['criticality']['score'],
-                    'severity' => CriticalityScale::fromRaw($row['criticality']['score'])->severity()->value,
-                ])->all(),
-            ],
-        ]);
-    }
-
-    public function getUserStats(User $user): array
-    {
-        $user->loadMissing(['skills.category', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences']);
-
-        $criticality = $this->riskService->computeUserCriticality($user);
-        $activeProjects = $user->projects->filter(
-            fn($p) => $p->started_at !== null
-                && $p->started_at <= now()
-                && $p->paused_at === null
-                && $p->completed_at === null
-                && $p->archived_at === null
+        return new UserStats(
+            criticality: $this->userService->getUserCriticalityStat($user),
+            busFactorInOrg: $this->userService->getUserBusFactorInOrgStat($user),
+            skills: $this->userService->getUserSkillsStat($user),
+            activeProjects: $this->userService->getUserActiveProjectsStat($user),
         );
-
-        $busFactorProjects = $activeProjects->filter(
-            fn($p) => $this->riskService->computeBusFactor($p) <= 2
-        );
-
-        $byCategory = $user->skills
-            ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
-            ->map(fn($skills, $cat) => [
-                'category' => $cat,
-                'count' => $skills->count(),
-                'avg_level' => round($skills->avg(fn($s) => $s->pivot->level), 1),
-            ])
-            ->values();
-
-        return [
-            'criticality' => array_merge($criticality, [
-                'severity' => CriticalityScale::fromRaw($criticality['score'])->severity()->value,
-            ]),
-            'bus_factor_in_org' => [
-                'count' => $busFactorProjects->count(),
-                'projects' => $busFactorProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
-            ],
-            'skills' => [
-                'total' => $user->skills->count(),
-                'by_category' => $byCategory->all(),
-            ],
-            'active_projects' => [
-                'count' => $activeProjects->count(),
-                'projects' => $activeProjects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
-            ],
-        ];
     }
 
     private function dispatchProjectRecalculations(User $user): void

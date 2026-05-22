@@ -3,8 +3,13 @@
 namespace App\Services;
 
 use App\Enums\UserStatus;
+use App\Metrics\CriticalityScale;
+use App\Metrics\Severity;
+use App\Metrics\Stat;
+use App\Metrics\TeamAvailabilityScale;
 use App\Models\Department;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -14,6 +19,10 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class UserService
 {
+    public function __construct(
+        private readonly RiskCalculationService $riskService,
+    ) {}
+
     /**
      * <summary>
      *  Build a paginated, filterable, sortable query for users via Spatie QueryBuilder.
@@ -185,27 +194,85 @@ class UserService
             ]);
     }
 
+    // ───────────────────────── /users/stats ─────────────────────────
+
     /**
      * <summary>
-     *  Org-wide aggregate user stats used by GET /users/stats.
-     *  Returns headcount + today availability + unique-skill-holder count.
-     *  Critical-user count and avg criticality are computed in the Manager
-     *  (require RiskCalculationService).
+     *  Total users count Stat.
      * </summary>
      *
-     * @return array total, available, away, unique_skill_holders, departments
+     * @return Stat
      */
-    public function getOrgUserStats(): array
+    public function getUsersTotalStat(): Stat
+    {
+        $total = User::count();
+
+        return new Stat(
+            value: "{$total} " . ($total === 1 ? 'user' : 'users'),
+            valueRaw: $total,
+            severity: Severity::OK,
+            insight: 'Headcount',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Available-today Stat — total minus users absent today. WARNING when anyone away.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getUsersAvailableStat(): Stat
     {
         $today = now()->toDateString();
-
         $total = User::count();
-        $away  = User::whereHas('absences', fn($q) => $q
+        $away = User::whereHas('absences', fn($q) => $q
             ->whereDate('start_date', '<=', $today)
             ->whereDate('end_date', '>=', $today)
         )->count();
+        $available = $total - $away;
 
-        $uniqueHolders = User::query()
+        return new Stat(
+            value: "{$available} available",
+            valueRaw: $available,
+            severity: $away > 0 ? Severity::WARNING : Severity::OK,
+            insight: $away > 0 ? "{$away} away today" : 'All present',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Critical-users Stat — count of users with criticality score &gt;= 50.
+     *  TODO(snapshot): replace per-user loop with a precomputed users.criticality_score column once cron lands.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getCriticalUsersStat(): Stat
+    {
+        $count = User::with(['skills', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences'])
+            ->get()
+            ->filter(fn(User $u) => $this->riskService->computeUserCriticality($u)['score'] >= 50)
+            ->count();
+
+        return new Stat(
+            value: $count === 0 ? 'Safe' : "{$count} at-risk",
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::CRITICAL : Severity::OK,
+            insight: 'Criticality ≥ 50',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Unique skill holders Stat — count of users who hold at least one skill no one else holds org-wide.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getUniqueSkillHoldersStat(): Stat
+    {
+        $count = User::query()
             ->whereHas('skills', function ($q) {
                 $q->whereIn('skills.id', function ($sub) {
                     $sub->from('user_skills')
@@ -216,12 +283,191 @@ class UserService
             })
             ->count();
 
-        return [
-            'total' => $total,
-            'available' => $total - $away,
-            'away' => $away,
-            'unique_skill_holders' => $uniqueHolders,
-        ];
+        return new Stat(
+            value: "{$count} " . ($count === 1 ? 'sole holder' : 'sole holders'),
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::WARNING : Severity::OK,
+            insight: 'Skill held by one user',
+        );
+    }
+
+    // ─────────────────────── /dashboard/stats ───────────────────────
+
+    /**
+     * <summary>
+     *  Return the ids of users absent today. Used by Dashboard absence-impact Stat
+     *  and any caller needing the live absent roster.
+     * </summary>
+     *
+     * @return array<int> User ids
+     */
+    public function getAbsentUserIdsToday(): array
+    {
+        $today = now()->toDateString();
+
+        return User::whereHas('absences', fn($q) => $q
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+        )->pluck('id')->all();
+    }
+
+    /**
+     * <summary>
+     *  Team-availability Stat for the dashboard — today's available/total headcount.
+     *  critical_absent counts distinct absent users whose active project has bus_factor &lt;= 1.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getTeamAvailabilityStat(): Stat
+    {
+        $today = now()->toDateString();
+        $total = User::count();
+
+        $absentIds = User::whereHas('absences', fn($q) => $q
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+        )->pluck('id');
+
+        $absent = $absentIds->count();
+        $available = $total - $absent;
+
+        $criticalAbsent = $absent > 0
+            ? DB::table('project_users')
+                ->join('projects', 'project_users.project_id', '=', 'projects.id')
+                ->whereIn('project_users.user_id', $absentIds)
+                ->whereNotNull('projects.started_at')
+                ->whereDate('projects.started_at', '<=', now())
+                ->whereNull('projects.paused_at')
+                ->whereNull('projects.completed_at')
+                ->whereNull('projects.archived_at')
+                ->where('projects.bus_factor', '<=', 1)
+                ->distinct()
+                ->count('project_users.user_id')
+            : 0;
+
+        $insight = match (true) {
+            $criticalAbsent > 0 => "{$criticalAbsent} critical employee" . ($criticalAbsent > 1 ? 's' : '') . ' absent',
+            $absent > 0 => "{$absent} employee" . ($absent > 1 ? 's' : '') . ' absent',
+            default => 'Fully operational',
+        };
+
+        return Stat::display(
+            "{$available}/{$total}",
+            $available,
+            TeamAvailabilityScale::fromCounts($absent, $criticalAbsent),
+            $insight,
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the criticality Stat for a single user from the live RiskCalculationService score.
+     *  TODO(snapshot): switch to a precomputed users.criticality_score column once the cron lands.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserCriticalityStat(User $user): Stat
+    {
+        $user->loadMissing(['skills', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences']);
+
+        $score = (int) $this->riskService->computeUserCriticality($user)['score'];
+
+        return Stat::fromScale(
+            CriticalityScale::fromRaw($score),
+            $score,
+            "Score: {$score}/100",
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the bus-factor-in-org Stat for a single user — count of active projects whose
+     *  precomputed bus_factor is &lt;= 2 and where the user is on the team.
+     *  Severity is CRITICAL when count &gt; 0 (any exposure is a problem), OK otherwise.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserBusFactorInOrgStat(User $user): Stat
+    {
+        $user->loadMissing('projects');
+
+        $count = $user->projects
+            ->filter(fn($p) => $p->started_at !== null
+                && $p->started_at <= now()
+                && $p->paused_at === null
+                && $p->completed_at === null
+                && $p->archived_at === null
+                && (int) $p->bus_factor <= 2
+            )
+            ->count();
+
+        return new Stat(
+            value: $count === 0 ? 'Safe' : (string) $count,
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::CRITICAL : Severity::OK,
+            insight: $count > 0
+                ? "{$count} project" . ($count > 1 ? 's' : '') . ' at risk'
+                : 'No single-point exposure',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the skills-count Stat for a single user. Insight shows the number of distinct skill categories.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserSkillsStat(User $user): Stat
+    {
+        $user->loadMissing('skills.category');
+
+        $total = $user->skills->count();
+        $catCount = $user->skills
+            ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
+            ->count();
+
+        return new Stat(
+            value: $total === 0 ? 'None' : (string) $total,
+            valueRaw: $total,
+            severity: Severity::OK,
+            insight: $catCount > 0 ? "{$catCount} " . ($catCount === 1 ? 'category' : 'categories') : null,
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the active-projects-count Stat for a single user (projects started, not paused/completed/archived).
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserActiveProjectsStat(User $user): Stat
+    {
+        $user->loadMissing('projects');
+
+        $count = $user->projects
+            ->filter(fn($p) => $p->started_at !== null
+                && $p->started_at <= now()
+                && $p->paused_at === null
+                && $p->completed_at === null
+                && $p->archived_at === null
+            )
+            ->count();
+
+        return new Stat(
+            value: $count === 0 ? 'None' : (string) $count,
+            valueRaw: $count,
+            severity: Severity::OK,
+            insight: $count > 0 ? 'Assigned' : null,
+        );
     }
 
     private function resolveUserStatus(User $user): UserStatus

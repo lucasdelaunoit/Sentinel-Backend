@@ -2,7 +2,12 @@
 
 namespace App\Services;
 
+use App\Metrics\AbsenceImpactScale;
+use App\Metrics\BusFactorScale;
 use App\Metrics\FragilityScale;
+use App\Metrics\KnowledgeCoverageScale;
+use App\Metrics\Severity;
+use App\Metrics\Stat;
 use App\Models\Project;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -12,76 +17,253 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class ProjectService
 {
+    public function __construct(
+        private readonly SkillCoverageService $coverageService,
+    ) {}
+
+    // ───────────────────────── /projects/stats ─────────────────────────
+
     /**
      * <summary>
-     *  Aggregate project-wide stats for the Projects page header.
-     *  Scope: non-archived projects only.
-     *  Returns avg fragility raw + tier and bucket counts derived from fragility tiers:
-     *    - critical_count: fragility tier in {fragile, critical} (raw > 60)
-     *    - stretched_count: fragility tier = stretched (41 <= raw <= 60)
+     *  Total non-archived projects count Stat.
      * </summary>
      *
-     * @return array total, avg_fragility_raw, avg_fragility, critical_count, stretched_count
+     * @return Stat
      */
-    public function getProjectsStats(): array
+    public function getProjectsTotalStat(): Stat
     {
-        $base = Project::query()->whereNull('archived_at');
+        $total = Project::query()->whereNull('archived_at')->count();
 
-        $total            = (clone $base)->count();
-        $avgFragilityRaw  = (int) round((clone $base)->avg('fragility_raw') ?? 0);
-        $criticalCount    = (clone $base)->where('fragility_raw', '>', 60)->count();
-        $stretchedCount   = (clone $base)->whereBetween('fragility_raw', [41, 60])->count();
-
-        $severity = match (true) {
-            $criticalCount > 0  => 'critical',
-            $stretchedCount > 0 => 'warning',
-            default             => 'ok',
-        };
-
-        return [
-            'total'                  => $total,
-            'avg_fragility_raw'      => $avgFragilityRaw,
-            'avg_fragility'          => FragilityScale::fromRaw($avgFragilityRaw)->value,
-            'avg_fragility_severity' => FragilityScale::fromRaw($avgFragilityRaw)->severity()->value,
-            'critical_count'         => $criticalCount,
-            'stretched_count'        => $stretchedCount,
-            'severity'               => $severity,
-        ];
+        return new Stat(
+            value: "{$total} " . ($total === 1 ? 'project' : 'projects'),
+            valueRaw: $total,
+            severity: Severity::OK,
+            insight: 'Active projects',
+        );
     }
 
     /**
      * <summary>
-     *  Assemble per-project stats card payload from precomputed columns + current team availability.
-     *  Returns fragility_raw/fragility tier + team{total, away}.
+     *  Average fragility Stat across non-archived projects — reads precomputed fragility_raw column.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsAvgFragilityStat(): Stat
+    {
+        $avg = (int) round(Project::query()->whereNull('archived_at')->avg('fragility_raw') ?? 0);
+
+        return Stat::fromScale(FragilityScale::fromRaw($avg), $avg, "Score: {$avg}/100");
+    }
+
+    /**
+     * <summary>
+     *  Count of fragile projects (fragility_raw &gt; 60). Severity CRITICAL when any, OK otherwise.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsFragileCountStat(): Stat
+    {
+        $count = Project::query()->whereNull('archived_at')->where('fragility_raw', '>', 60)->count();
+
+        return new Stat(
+            value: $count === 0 ? 'Healthy' : (string) $count,
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::CRITICAL : Severity::OK,
+            insight: $count > 0 ? 'Fragility > 60' : null,
+        );
+    }
+
+    /**
+     * <summary>
+     *  Count of stretched projects (fragility_raw 41-60). Severity WARNING when any, OK otherwise.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsStretchedCountStat(): Stat
+    {
+        $count = Project::query()->whereNull('archived_at')->whereBetween('fragility_raw', [41, 60])->count();
+
+        return new Stat(
+            value: $count === 0 ? 'None' : (string) $count,
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::WARNING : Severity::OK,
+            insight: $count > 0 ? 'Fragility 41-60' : null,
+        );
+    }
+
+    // ──────────────────── /projects/{project}/stats ────────────────────
+
+    /**
+     * <summary>
+     *  Fragility Stat for one project — reads precomputed projects.fragility_raw.
      * </summary>
      *
      * @param Project $project Target project
-     * @return array fragility_raw, fragility, bus_factor, team{total, away}
+     * @return Stat
      */
-    public function getProjectStats(Project $project): array
+    public function getProjectFragilityStat(Project $project): Stat
+    {
+        $raw = (int) $project->fragility_raw;
+
+        return Stat::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: {$raw}/100");
+    }
+
+    /**
+     * <summary>
+     *  Bus-factor Stat for one project — reads precomputed projects.bus_factor.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Stat
+     */
+    public function getProjectBusFactorStat(Project $project): Stat
+    {
+        $bf = (int) $project->bus_factor;
+
+        return Stat::fromScale(
+            BusFactorScale::fromCount($bf),
+            $bf,
+            $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : null,
+        );
+    }
+
+    /**
+     * <summary>
+     *  Team-availability Stat for one project — present/total ratio, WARNING when anyone away today.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Stat
+     */
+    public function getProjectTeamStat(Project $project): Stat
     {
         $today = now()->toDateString();
-
         $total = $project->users()->count();
-        $away  = $project->users()
+        $away = $project->users()
             ->whereHas('absences', fn($q) => $q
                 ->whereDate('start_date', '<=', $today)
                 ->whereDate('end_date', '>=', $today)
             )
             ->count();
+        $present = $total - $away;
 
-        $fragilityRaw = (int) $project->fragility_raw;
+        return new Stat(
+            value: "{$present}/{$total}",
+            valueRaw: $present,
+            severity: $away > 0 ? Severity::WARNING : Severity::OK,
+            insight: $away > 0 ? "{$away} away today" : 'Full team',
+        );
+    }
 
-        return [
-            'fragility_raw'      => $fragilityRaw,
-            'fragility'          => FragilityScale::fromRaw($fragilityRaw)->value,
-            'fragility_severity' => FragilityScale::fromRaw($fragilityRaw)->severity()->value,
-            'bus_factor'         => (int) $project->bus_factor,
-            'team' => [
-                'total' => $total,
-                'away'  => $away,
-            ],
-        ];
+    // ───────────────────────── /dashboard/stats ─────────────────────────
+
+    /**
+     * <summary>
+     *  Worst-fragility Stat for the dashboard — max(fragility_raw) over active projects.
+     *  Insight lists fragile + stretched bucket counts.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getWorstFragilityStat(): Stat
+    {
+        $scores = Project::active()->pluck('fragility_raw');
+
+        $worst = (int) ($scores->max() ?? 0);
+        $fragile = $scores->filter(fn($v) => $v > 60)->count();
+        $stretched = $scores->filter(fn($v) => $v > 40 && $v <= 60)->count();
+
+        $parts = [];
+        if ($fragile > 0) {
+            $parts[] = "{$fragile} fragile";
+        }
+        if ($stretched > 0) {
+            $parts[] = "{$stretched} stretched";
+        }
+        $insight = empty($parts) ? 'All projects healthy' : implode(' · ', $parts);
+
+        return Stat::fromScale(FragilityScale::fromRaw($worst), $worst, $insight);
+    }
+
+    /**
+     * <summary>
+     *  Knowledge-coverage Stat — org-wide % of required skills currently 'safe'.
+     *  TODO(snapshot): swap live coverage walk for a precomputed org metric snapshot once cron lands.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getKnowledgeCoverageStat(): Stat
+    {
+        $projects = Project::active()
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
+            ->get();
+
+        $total = 0;
+        $safe = 0;
+
+        foreach ($projects as $project) {
+            foreach ($this->coverageService->getCoverage($project) as $skill) {
+                $total++;
+                if ($skill['status'] === 'safe') {
+                    $safe++;
+                }
+            }
+        }
+
+        $underCovered = $total - $safe;
+        $pct = $total > 0 ? (int) round(($safe / $total) * 100) : 100;
+
+        $insight = $underCovered > 0
+            ? "{$underCovered} skill" . ($underCovered > 1 ? 's' : '') . ' under-covered'
+            : 'All skills covered';
+
+        return Stat::display("{$pct}%", $pct, KnowledgeCoverageScale::fromRaw($pct), $insight);
+    }
+
+    /**
+     * <summary>
+     *  Absence-impact Stat — count of skills that flipped to 'uncovered' because of today's absences.
+     *  Caller passes absent user ids — keeps this service stateless about "who is away today".
+     *  TODO(snapshot): swap live diff for a precomputed org metric snapshot once cron lands.
+     * </summary>
+     *
+     * @param array<int> $absentUserIds User ids absent today
+     * @return Stat
+     */
+    public function getAbsenceImpactStat(array $absentUserIds): Stat
+    {
+        if (empty($absentUserIds)) {
+            return Stat::fromScale(AbsenceImpactScale::fromRaw(0), 0, 'No impact from absences');
+        }
+
+        $projects = Project::active()
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
+            ->get();
+
+        $count = 0;
+        foreach ($projects as $project) {
+            $baseline = $this->coverageService->getCoverage($project);
+            $withAbsence = $this->coverageService->getCoverageAfterAbsence($project, $absentUserIds);
+
+            foreach ($withAbsence as $skillId => $simSkill) {
+                if (
+                    $simSkill['status'] === 'uncovered' &&
+                    ($baseline[$skillId]['status'] ?? 'uncovered') !== 'uncovered'
+                ) {
+                    $count++;
+                }
+            }
+        }
+
+        $insight = $count > 0
+            ? "{$count} skill" . ($count > 1 ? 's' : '') . ' became uncovered'
+            : 'No impact from absences';
+
+        return Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $insight);
     }
 
     /**
