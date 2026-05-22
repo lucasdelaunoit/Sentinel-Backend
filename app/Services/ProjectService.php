@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Metrics\AbsenceImpactScale;
-use App\Metrics\BusFactorScale;
-use App\Metrics\FragilityScale;
-use App\Metrics\KnowledgeCoverageScale;
+use App\Metrics\Scales\AbsenceImpactScale;
+use App\Metrics\Scales\BusFactorScale;
+use App\Metrics\Scales\FragilityScale;
+use App\Metrics\Scales\KnowledgeCoverageScale;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\Project;

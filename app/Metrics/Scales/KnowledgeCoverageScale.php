@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Scales;
 
 /**
  * Knowledge coverage tier — % of required skills that are 'safe'.

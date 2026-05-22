@@ -1,9 +1,7 @@
 <?php
 
-namespace App\Models;
+namespace App\Metrics\Snapshots;
 
-use App\Metrics\MetricKey;
-use App\Metrics\MetricScope;
 use App\Metrics\Severity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;

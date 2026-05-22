@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Scales;
 
 /**
  * Bus factor tier. Driven by a raw count (lower = worse), not a 0-100 score.

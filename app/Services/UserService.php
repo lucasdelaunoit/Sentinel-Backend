@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Enums\UserStatus;
-use App\Metrics\CriticalityScale;
+use App\Metrics\Scales\CriticalityScale;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
-use App\Metrics\TeamAvailabilityScale;
+use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;

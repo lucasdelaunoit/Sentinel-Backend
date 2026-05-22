@@ -2,93 +2,162 @@
 
 namespace App\Metrics\Calculators;
 
-use App\Metrics\FragilityScale;
+use App\Models\OrganizationSetting;
 use App\Models\Project;
+use App\Services\OrganizationSettingService;
+use App\Services\RuleEvaluator;
+use App\Services\RuleService;
 use App\Services\SkillCoverageService;
 
 /**
- * Fragility metric — both the headline KPI (worst active project's score)
- * and the at-risk drilldown payload (critical + unstable buckets with
- * missing / siloed skills per project).
+ * Raw fragility score (0-100) for a project. Blends bus risk, uncovered ratio,
+ * silo ratio, absence impact (LAYER 1+2 per spec). Applies fragility_tolerance
+ * multiplier and adds rule_penalty from violations affecting the project.
+ *
+ * Accepts optional $absentUserIds so the same code path serves the live state
+ * AND simulation runs (virtual absence roster).
  */
 class FragilityCalculator
 {
     public function __construct(
-        private readonly SkillCoverageService $coverageService,
+        private readonly SkillCoverageService $coverage,
+        private readonly OrganizationSettingService $orgSettings,
+        private readonly BusFactorCalculator $busFactor,
     ) {}
 
     /**
      * <summary>
-     *  Headline KPI — worst active project's fragility score with a tier-count insight.
+     *  Compute the raw fragility score (float 0-100) for a project.
      * </summary>
      *
-     * @return array{raw: int, insight: string}
+     * @param Project $project Target project
+     * @param array<int> $absentUserIds Virtual absence roster (simulation). Empty for live state.
+     * @return float
      */
-    public function kpi(): array
+    public function calculate(Project $project, array $absentUserIds = []): float
     {
-        $scores = Project::active()->pluck('fragility_raw');
+        $settings = $this->orgSettings->getOrganizationSetting();
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
+        $total = count($matrix);
 
-        $worst = (int) ($scores->max() ?? 0);
-        $fragile = $scores->filter(fn($v) => $v > 60)->count();
-        $stretched = $scores->filter(fn($v) => $v > 40 && $v <= 60)->count();
+        if ($total === 0) return 0.0;
 
-        $parts = [];
-        if ($fragile > 0) {
-            $parts[] = "{$fragile} fragile";
+        $uncovered = 0;
+        $siloed = 0;
+        foreach ($matrix as $row) {
+            if ($row['status'] === 'uncovered') $uncovered++;
+            elseif ($row['status'] === 'siloed') $siloed++;
         }
-        if ($stretched > 0) {
-            $parts[] = "{$stretched} stretched";
-        }
+        $uncoveredRatio = $uncovered / $total;
+        $siloRatio = $siloed / $total;
 
-        return [
-            'raw' => $worst,
-            'insight' => empty($parts) ? 'All projects healthy' : implode(' · ', $parts),
-        ];
+        $absenceImpact = $this->computeAbsenceImpact($project, $matrix, $absentUserIds, $settings);
+
+        $bf = $this->busFactor->calculate($project, $absentUserIds);
+        $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
+
+        $wBus = (int) $settings->fragility_weight_bus_factor;
+        $wUnc = (int) $settings->fragility_weight_uncovered_skills;
+        $wSilo = (int) $settings->fragility_weight_silos;
+        $wAbs = (int) $settings->fragility_weight_absence_impact;
+        $sumW = max(1, $wBus + $wUnc + $wSilo + $wAbs);
+
+        $fragility = (
+            $busRisk * $wBus +
+            $uncoveredRatio * 100 * $wUnc +
+            $siloRatio * 100 * $wSilo +
+            $absenceImpact * 100 * $wAbs
+        ) / $sumW;
+
+        $tolerance = match ($settings->fragility_tolerance) {
+            'conservative' => 1.2,
+            'aggressive' => 0.8,
+            default => 1.0,
+        };
+
+        $fragility = min(100.0, $fragility * $tolerance);
+        $fragility += $this->computeRulePenalty($project, $settings);
+
+        return max(0.0, min(100.0, $fragility));
     }
 
     /**
-     * <summary>
-     *  Drilldown — projects with fragility > 40, split into critical (>60) and unstable (40-60),
-     *  each enriched with missing + siloed skills from the live coverage matrix.
-     * </summary>
-     *
-     * @return array{critical: array<int, array>, unstable: array<int, array>}
+     * Newly-uncovered ratio when horizon absences are projected on top of the live state.
+     * Absences already inside $absentUserIds are part of the baseline, not "added".
      */
-    public function detail(): array
+    private function computeAbsenceImpact(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings): float
     {
-        $projects = Project::active()
-            ->where('fragility_raw', '>', 40)
-            ->with(['skillRequirements', 'users.skills', 'users.absences'])
-            ->orderByDesc('fragility_raw')
-            ->get();
+        $total = count($baselineMatrix);
+        if ($total === 0) return 0.0;
 
-        $mapProject = function (Project $p) {
-            $matrix = $this->coverageService->getCoverage($p);
+        $horizonAbsent = $this->getHorizonAbsentUserIds($project, (int) $settings->absence_horizon_days);
+        $merged = array_values(array_unique(array_merge($absentUserIds, $horizonAbsent)));
 
-            return [
-                'id' => $p->id,
-                'name' => $p->name,
-                'fragility_raw' => $p->fragility_raw,
-                'fragility' => FragilityScale::fromRaw($p->fragility_raw)->value,
-                'bus_factor' => $p->bus_factor,
-                'missing_skills' => collect($matrix)
-                    ->where('status', 'uncovered')
-                    ->map(fn($s) => ['skill_id' => $s['skill_id'], 'skill_name' => $s['skill_name']])
-                    ->values()->all(),
-                'siloed_skills' => collect($matrix)
-                    ->where('status', 'siloed')
-                    ->map(fn($s) => [
-                        'skill_id' => $s['skill_id'],
-                        'skill_name' => $s['skill_name'],
-                        'owner' => $s['employees'][0] ?? null,
-                    ])
-                    ->values()->all(),
-            ];
+        if ($merged === $absentUserIds) return 0.0;
+
+        $with = $this->coverage->getCoverage($project, $merged);
+        $newlyUncovered = 0;
+        foreach ($with as $sid => $row) {
+            if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {
+                $newlyUncovered++;
+            }
+        }
+        return $newlyUncovered / $total;
+    }
+
+    /**
+     * @return array<int>
+     */
+    private function getHorizonAbsentUserIds(Project $project, int $horizonDays): array
+    {
+        $today = now()->toDateString();
+        $horizonEnd = now()->addDays($horizonDays)->toDateString();
+
+        return $project->users()
+            ->whereHas('absences', fn($q) => $q
+                ->whereDate('start_date', '<=', $horizonEnd)
+                ->whereDate('end_date', '>=', $today)
+            )
+            ->pluck('users.id')
+            ->all();
+    }
+
+    /**
+     * Additive fragility penalty from rule violations affecting this project.
+     * Resolves RuleEvaluator lazily to avoid circular dependency at construction.
+     */
+    private function computeRulePenalty(Project $project, OrganizationSetting $settings): float
+    {
+        $ruleService = app(RuleService::class);
+        $rules = $ruleService->getEnabledRules();
+        if ($rules->isEmpty()) return 0.0;
+
+        $applicable = $rules->filter(fn($r) => $this->ruleAppliesTo($r, $project));
+        if ($applicable->isEmpty()) return 0.0;
+
+        $evaluator = app(RuleEvaluator::class);
+        $allViolations = $evaluator->evaluateOrganization();
+
+        $hit = 0;
+        foreach ($allViolations as $v) {
+            if ($v['subject_type'] === 'project' && (int) $v['subject_id'] === $project->id) {
+                $hit++;
+            } elseif ($v['subject_type'] === 'organization') {
+                $ruleId = (int) $v['rule_id'];
+                $rule = $applicable->firstWhere('id', $ruleId);
+                if ($rule) $hit++;
+            }
+        }
+
+        return ($hit / $applicable->count()) * (int) $settings->rule_violation_penalty;
+    }
+
+    private function ruleAppliesTo($rule, Project $project): bool
+    {
+        return match ($rule->scope_type) {
+            'project' => (int) $rule->scope_id === (int) $project->id,
+            'department' => $project->users()->where('department_id', $rule->scope_id)->exists(),
+            default => true,
         };
-
-        return [
-            'critical' => $projects->filter(fn($p) => $p->fragility_raw > 60)->map($mapProject)->values()->all(),
-            'unstable' => $projects->filter(fn($p) => $p->fragility_raw > 40 && $p->fragility_raw <= 60)->map($mapProject)->values()->all(),
-        ];
     }
 }

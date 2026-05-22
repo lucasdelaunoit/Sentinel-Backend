@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\RuleScope;
 use App\Enums\RuleType;
+use App\Metrics\Calculators\BusFactorCalculator;
 use App\Models\Project;
 use App\Models\Rule;
 use App\Models\Simulation;
@@ -13,9 +14,9 @@ use Illuminate\Support\Collection;
 class RuleEvaluator
 {
     public function __construct(
-        private readonly RuleService           $ruleService,
-        private readonly SkillCoverageService  $coverage,
-        private readonly RiskCalculationService $risk,
+        private readonly RuleService $ruleService,
+        private readonly SkillCoverageService $coverage,
+        private readonly BusFactorCalculator $busFactor,
     ) {}
 
     /**
@@ -95,7 +96,7 @@ class RuleEvaluator
         $violations = [];
 
         foreach ($projects as $project) {
-            $bf = $this->risk->computeBusFactor($project);
+            $bf = $this->busFactor->calculate($project);
             if ($bf > 0 && $bf <= $max) {
                 $violations[] = $this->violation($rule, 'project', $project->id,
                     "Project '{$project->name}' bus factor is {$bf} (≤ threshold {$max}).");

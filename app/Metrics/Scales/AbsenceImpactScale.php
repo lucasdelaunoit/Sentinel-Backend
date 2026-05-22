@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Scales;
 
 /**
  * Absence impact tier — count of skills newly uncovered because of

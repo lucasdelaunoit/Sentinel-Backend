@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Scales;
 
 /**
  * Team availability tier — driven by criticalAbsences (>0 critical),

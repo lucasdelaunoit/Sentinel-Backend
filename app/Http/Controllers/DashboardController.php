@@ -28,23 +28,24 @@ class DashboardController extends Controller
         return new DashboardStatsResource($stats);
     }
 
+    // TODO : Maybe later
     public function projectsAtRiskDetail(): JsonResponse
     {
-        return response()->json($this->dashboardManager->getProjectsAtRiskDetail());
+        return response()->json([], 200);
     }
 
     public function knowledgeCoverageDetail(): JsonResponse
     {
-        return response()->json($this->dashboardManager->getKnowledgeCoverageDetail());
+        return response()->json([], 200);
     }
 
     public function teamAvailabilityDetail(): JsonResponse
     {
-        return response()->json($this->dashboardManager->getTeamAvailabilityDetail());
+        return response()->json([], 200);
     }
 
     public function absenceImpactDetail(): JsonResponse
     {
-        return response()->json($this->dashboardManager->getAbsenceImpactDetail());
+        return response()->json([], 200);
     }
 }

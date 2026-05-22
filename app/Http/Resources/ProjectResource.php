@@ -2,8 +2,8 @@
 
 namespace App\Http\Resources;
 
-use App\Metrics\BusFactorScale;
-use App\Metrics\FragilityScale;
+use App\Metrics\Scales\BusFactorScale;
+use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Stat;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Snapshots;
 
 /**
  * Identifies what metric a snapshot row holds.

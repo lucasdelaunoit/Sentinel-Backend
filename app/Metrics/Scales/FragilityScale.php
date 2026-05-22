@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Scales;
 
 /**
  * Fragility tier (0-100, higher = worse). Breakpoints match the spec:

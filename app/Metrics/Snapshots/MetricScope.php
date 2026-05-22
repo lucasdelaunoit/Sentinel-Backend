@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Metrics;
+namespace App\Metrics\Snapshots;
 
 /**
  * Scope a metric snapshot belongs to.

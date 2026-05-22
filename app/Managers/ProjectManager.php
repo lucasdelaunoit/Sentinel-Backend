@@ -5,13 +5,14 @@ namespace App\Managers;
 use App\DTO\Stats\ProjectsStats;
 use App\DTO\Stats\ProjectStats;
 use App\Jobs\RecalculateProjectRiskJob;
-use App\Metrics\FragilityScale;
-use App\Metrics\MetricKey;
-use App\Metrics\MetricScope;
+use App\Metrics\Calculators\BusFactorCalculator;
+use App\Metrics\Calculators\FragilityCalculator;
+use App\Metrics\Scales\FragilityScale;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricScope;
 use App\Models\Project;
-use App\Services\MetricSnapshotService;
+use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Services\ProjectService;
-use App\Services\RiskCalculationService;
 use App\Services\SkillCoverageService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,36 +23,52 @@ class ProjectManager
 {
     public function __construct(
         private readonly SkillCoverageService $coverageService,
-        private readonly RiskCalculationService $riskService,
         private readonly ProjectService $projectService,
         private readonly MetricSnapshotService $snapshotService,
+        private readonly FragilityCalculator $fragilityCalculator,
+        private readonly BusFactorCalculator $busFactorCalculator,
     ) {}
 
     /**
      * <summary>
-     *  Capture point-in-time metric snapshots for a project — currently fragility + bus_factor.
-     *  One snapshot row per metric. Called by the observer (on column change) and the daily cron.
-     *  Stats are sourced from ProjectService builders so the wire shape stays consistent with the live read.
+     *  Recompute fragility + bus_factor for a project and persist both the cache columns
+     *  and the metric_snapshots history rows in a single transaction.
+     *  This is the SINGLE writer for project metrics — columns and snapshots can't drift
+     *  because the same transaction owns both writes. Reads stay column-fast; snapshots
+     *  capture full history for trends.
      * </summary>
      *
      * @param Project $project Target project
      * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
-    public function captureProjectSnapshots(Project $project): void
+    public function recalculateProjectMetrics(Project $project): void
     {
-        $this->snapshotService->captureSnapshot(
-            MetricScope::Project,
-            $project->id,
-            MetricKey::Fragility,
-            $this->projectService->getProjectFragilityStat($project),
-        );
+        $fragilityRaw = (int) round($this->fragilityCalculator->calculate($project));
+        $busFactor = $this->busFactorCalculator->calculate($project);
 
-        $this->snapshotService->captureSnapshot(
-            MetricScope::Project,
-            $project->id,
-            MetricKey::BusFactor,
-            $this->projectService->getProjectBusFactorStat($project),
-        );
+        DB::transaction(function () use ($project, $fragilityRaw, $busFactor) {
+            $project->update([
+                'fragility_raw' => $fragilityRaw,
+                'bus_factor' => $busFactor,
+            ]);
+
+            $project->refresh();
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Project,
+                $project->id,
+                MetricKey::Fragility,
+                $this->projectService->getProjectFragilityStat($project),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Project,
+                $project->id,
+                MetricKey::BusFactor,
+                $this->projectService->getProjectBusFactorStat($project),
+            );
+        });
     }
 
     /**
@@ -208,10 +225,10 @@ class ProjectManager
      */
     public function getProjectMetrics(Project $project): array
     {
-        $fragilityRaw = $this->riskService->computeFragilityRaw($project);
+        $fragilityRaw = $this->fragilityCalculator->calculate($project);
 
         return [
-            'bus_factor' => $this->riskService->computeBusFactor($project),
+            'bus_factor' => $this->busFactorCalculator->calculate($project),
             'fragility_raw' => $fragilityRaw,
             'fragility' => FragilityScale::fromRaw($fragilityRaw)->value,
             'redundancy' => $this->coverageService->getRedundancy($project),

@@ -1,11 +1,8 @@
 <?php
 
-namespace App\Services;
+namespace App\Metrics\Snapshots;
 
-use App\Metrics\MetricKey;
-use App\Metrics\MetricScope;
 use App\Metrics\Stat;
-use App\Models\MetricSnapshot;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
