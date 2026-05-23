@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * User criticality tier (0-100). Breakpoints:
  *   <30 low_risk · <60 notable · ≥60 critical.

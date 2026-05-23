@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * Absence impact tier — count of skills newly uncovered because of
  * active absences. Higher = worse.

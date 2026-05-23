@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 interface Scale
 {
     /** Human-facing tier label ("Excellent", "Fragile", ...). */

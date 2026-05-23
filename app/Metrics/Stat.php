@@ -2,6 +2,8 @@
 
 namespace App\Metrics;
 
+use App\Metrics\Scales\Scale;
+
 /**
  * Single, immutable shape for every metric value shipped over the wire.
  *

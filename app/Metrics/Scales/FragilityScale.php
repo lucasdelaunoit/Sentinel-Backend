@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * Fragility tier (0-100, higher = worse). Breakpoints match the spec:
  *   ≤20 solid · ≤40 stable · ≤60 stretched · ≤80 fragile · >80 critical.

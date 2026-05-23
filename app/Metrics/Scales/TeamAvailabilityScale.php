@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * Team availability tier — driven by criticalAbsences (>0 critical),
  * then anyAbsence (>0 warning), else ok. Built with named constructor

@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * Bus factor tier. Driven by a raw count (lower = worse), not a 0-100 score.
  *   0 no_coverage · 1 single_point · 2 thin · 3-4 adequate · 5+ resilient.

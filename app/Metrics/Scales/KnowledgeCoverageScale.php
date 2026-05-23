@@ -2,6 +2,8 @@
 
 namespace App\Metrics\Scales;
 
+use App\Metrics\Severity;
+
 /**
  * Knowledge coverage tier — % of required skills that are 'safe'.
  * Higher = better.
