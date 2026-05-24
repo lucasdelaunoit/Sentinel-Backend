@@ -2,8 +2,9 @@
 
 namespace App\Http\Resources;
 
-use App\Metrics\Scales\BusFactorScale;
 use App\Metrics\Scales\FragilityScale;
+use App\Metrics\Scales\KnowledgeCoverageScale;
+use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Metrics\Stat;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -15,7 +16,8 @@ class ProjectResource extends JsonResource
     public function toArray(Request $request): array
     {
         $fragilityRaw = (int) $this->fragility_raw;
-        $busFactor = (int) $this->bus_factor;
+        $teamAvailRaw = (int) $this->team_availability_raw;
+        $knowledgeRaw = (int) $this->knowledge_coverage_raw;
 
         return [
             'id' => $this->id,
@@ -27,10 +29,16 @@ class ProjectResource extends JsonResource
                 $fragilityRaw,
                 "Score: {$fragilityRaw}/100",
             )->toArray(),
-            'bus_factor' => Stat::fromScale(
-                BusFactorScale::fromCount($busFactor),
-                $busFactor,
-                $busFactor > 0 ? "{$busFactor} key " . ($busFactor === 1 ? 'person' : 'people') : null,
+            'team_availability' => Stat::fromScale(
+                TeamAvailabilityScale::fromRaw($teamAvailRaw),
+                $teamAvailRaw,
+                "{$teamAvailRaw}% available",
+            )->toArray(),
+            'knowledge_coverage' => Stat::display(
+                "{$knowledgeRaw}%",
+                $knowledgeRaw,
+                KnowledgeCoverageScale::fromRaw($knowledgeRaw),
+                "{$knowledgeRaw}% safe",
             )->toArray(),
             'started_at' => $this->started_at,
             'deadline' => $this->deadline,

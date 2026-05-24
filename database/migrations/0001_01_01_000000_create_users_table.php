@@ -20,6 +20,13 @@ return new class extends Migration
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->string('title')->nullable();
+
+            // Cached metrics — populated by recalc job
+            $table->unsignedTinyInteger('criticality_raw')->default(0);
+            $table->unsignedSmallInteger('bus_factor_in_org_raw')->default(0);
+            $table->unsignedSmallInteger('skills_count')->default(0);
+            $table->unsignedSmallInteger('active_projects_count')->default(0);
+
             $table->rememberToken();
             $table->timestamps();
         });

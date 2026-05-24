@@ -7,6 +7,8 @@ use App\DTO\Stats\ProjectStats;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Metrics\Calculators\FragilityCalculator;
+use App\Metrics\Calculators\KnowledgeCoverageCalculator;
+use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Snapshots\MetricKey;
 use App\Metrics\Snapshots\MetricScope;
@@ -27,15 +29,15 @@ class ProjectManager
         private readonly MetricSnapshotService $snapshotService,
         private readonly FragilityCalculator $fragilityCalculator,
         private readonly BusFactorCalculator $busFactorCalculator,
+        private readonly TeamAvailabilityCalculator $teamAvailabilityCalculator,
+        private readonly KnowledgeCoverageCalculator $knowledgeCoverageCalculator,
     ) {}
 
     /**
      * <summary>
-     *  Recompute fragility + bus_factor for a project and persist both the cache columns
-     *  and the metric_snapshots history rows in a single transaction.
-     *  This is the SINGLE writer for project metrics — columns and snapshots can't drift
-     *  because the same transaction owns both writes. Reads stay column-fast; snapshots
-     *  capture full history for trends.
+     *  Recompute fragility + team_availability + knowledge_coverage for a project and persist
+     *  the cache columns + metric_snapshots history rows in a single transaction.
+     *  Single writer — columns and snapshots can't drift because the same transaction owns both.
      * </summary>
      *
      * @param Project $project Target project
@@ -45,12 +47,14 @@ class ProjectManager
     public function recalculateProjectMetrics(Project $project): void
     {
         $fragilityRaw = (int) round($this->fragilityCalculator->calculate($project));
-        $busFactor = $this->busFactorCalculator->calculate($project);
+        $teamAvailRaw = (int) round($this->teamAvailabilityCalculator->calculate($project));
+        $knowledgeRaw = (int) round($this->knowledgeCoverageCalculator->calculate($project));
 
-        DB::transaction(function () use ($project, $fragilityRaw, $busFactor) {
+        DB::transaction(function () use ($project, $fragilityRaw, $teamAvailRaw, $knowledgeRaw) {
             $project->update([
                 'fragility_raw' => $fragilityRaw,
-                'bus_factor' => $busFactor,
+                'team_availability_raw' => $teamAvailRaw,
+                'knowledge_coverage_raw' => $knowledgeRaw,
             ]);
 
             $project->refresh();
@@ -65,8 +69,15 @@ class ProjectManager
             $this->snapshotService->captureSnapshot(
                 MetricScope::Project,
                 $project->id,
-                MetricKey::BusFactor,
-                $this->projectService->getProjectBusFactorStat($project),
+                MetricKey::TeamAvailability,
+                $this->projectService->getProjectTeamAvailabilityStat($project),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Project,
+                $project->id,
+                MetricKey::KnowledgeCoverage,
+                $this->projectService->getProjectKnowledgeCoverageStat($project),
             );
         });
     }
@@ -96,14 +107,14 @@ class ProjectManager
      * </summary>
      *
      * @param Project $project Target project
-     * @return ProjectStats fragility, bus_factor, team
+     * @return ProjectStats fragility, team_availability, knowledge_coverage
      */
     public function getProjectStats(Project $project): ProjectStats
     {
         return new ProjectStats(
             fragility: $this->projectService->getProjectFragilityStat($project),
-            busFactor: $this->projectService->getProjectBusFactorStat($project),
-            team: $this->projectService->getProjectTeamStat($project),
+            teamAvailability: $this->projectService->getProjectTeamAvailabilityStat($project),
+            knowledgeCoverage: $this->projectService->getProjectKnowledgeCoverageStat($project),
         );
     }
 

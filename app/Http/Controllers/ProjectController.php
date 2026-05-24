@@ -42,11 +42,11 @@ class ProjectController extends Controller
 
     /**
      * <summary>
-     *  Per-project stats card: fragility_raw + tier, bus_factor, team{total, away}.
+     *  Per-project stats card: fragility, team_availability, knowledge_coverage.
      * </summary>
      *
      * @param Project $project Route-model bound project
-     * @return ProjectStatsResource fragility_raw, fragility, bus_factor, team
+     * @return ProjectStatsResource fragility, team_availability, knowledge_coverage
      */
     public function getProjectStats(Project $project): ProjectStatsResource
     {

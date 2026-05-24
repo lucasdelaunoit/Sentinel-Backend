@@ -5,21 +5,21 @@ namespace App\Metrics\Scales;
 use App\Metrics\Severity;
 
 /**
- * Team availability tier — driven by criticalAbsences (>0 critical),
- * then anyAbsence (>0 warning), else ok. Built with named constructor
- * rather than fromRaw because severity depends on more than one number.
+ * Team availability tier — % of team members currently available (not absent).
+ * Higher = better.
+ *   <50 critical · <75 partial · ≥75 operational.
  */
 enum TeamAvailabilityScale: string implements Scale
 {
-    case OPERATIONAL = 'operational';
-    case PARTIAL = 'partial';
     case CRITICAL = 'critical';
+    case PARTIAL = 'partial';
+    case OPERATIONAL = 'operational';
 
-    public static function fromCounts(int $absent, int $criticalAbsent): self
+    public static function fromRaw(float|int $pct): self
     {
         return match (true) {
-            $criticalAbsent > 0 => self::CRITICAL,
-            $absent > 0 => self::PARTIAL,
+            $pct < 50 => self::CRITICAL,
+            $pct < 75 => self::PARTIAL,
             default => self::OPERATIONAL,
         };
     }
@@ -27,18 +27,18 @@ enum TeamAvailabilityScale: string implements Scale
     public function label(): string
     {
         return match ($this) {
-            self::OPERATIONAL => 'Operational',
-            self::PARTIAL => 'Partial',
             self::CRITICAL => 'Critical',
+            self::PARTIAL => 'Partial',
+            self::OPERATIONAL => 'Operational',
         };
     }
 
     public function severity(): Severity
     {
         return match ($this) {
-            self::OPERATIONAL => Severity::OK,
-            self::PARTIAL => Severity::WARNING,
             self::CRITICAL => Severity::CRITICAL,
+            self::PARTIAL => Severity::WARNING,
+            self::OPERATIONAL => Severity::OK,
         };
     }
 }

@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Metrics\Scales\AbsenceImpactScale;
-use App\Metrics\Scales\BusFactorScale;
 use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Scales\KnowledgeCoverageScale;
+use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\Project;
@@ -111,51 +111,34 @@ class ProjectService
         return Stat::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: {$raw}/100");
     }
 
-    /**
+/**
      * <summary>
-     *  Bus-factor Stat for one project — reads precomputed projects.bus_factor.
+     *  Team-availability Stat for one project — reads precomputed projects.team_availability_raw (% available).
      * </summary>
      *
      * @param Project $project Target project
      * @return Stat
      */
-    public function getProjectBusFactorStat(Project $project): Stat
+    public function getProjectTeamAvailabilityStat(Project $project): Stat
     {
-        $bf = (int) $project->bus_factor;
+        $raw = (int) $project->team_availability_raw;
 
-        return Stat::fromScale(
-            BusFactorScale::fromCount($bf),
-            $bf,
-            $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : null,
-        );
+        return Stat::fromScale(TeamAvailabilityScale::fromRaw($raw), $raw, "{$raw}% available");
     }
 
     /**
      * <summary>
-     *  Team-availability Stat for one project — present/total ratio, WARNING when anyone away today.
+     *  Knowledge-coverage Stat for one project — reads precomputed projects.knowledge_coverage_raw (% safe).
      * </summary>
      *
      * @param Project $project Target project
      * @return Stat
      */
-    public function getProjectTeamStat(Project $project): Stat
+    public function getProjectKnowledgeCoverageStat(Project $project): Stat
     {
-        $today = now()->toDateString();
-        $total = $project->users()->count();
-        $away = $project->users()
-            ->whereHas('absences', fn($q) => $q
-                ->whereDate('start_date', '<=', $today)
-                ->whereDate('end_date', '>=', $today)
-            )
-            ->count();
-        $present = $total - $away;
+        $raw = (int) $project->knowledge_coverage_raw;
 
-        return new Stat(
-            value: "{$present}/{$total}",
-            valueRaw: $present,
-            severity: $away > 0 ? Severity::WARNING : Severity::OK,
-            insight: $away > 0 ? "{$away} away today" : 'Full team',
-        );
+        return Stat::display("{$raw}%", $raw, KnowledgeCoverageScale::fromRaw($raw), "{$raw}% safe");
     }
 
     // ───────────────────────── /dashboard/stats ─────────────────────────

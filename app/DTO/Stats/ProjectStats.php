@@ -11,16 +11,16 @@ final readonly class ProjectStats
 {
     public function __construct(
         public Stat $fragility,
-        public Stat $busFactor,
-        public Stat $team,
+        public Stat $teamAvailability,
+        public Stat $knowledgeCoverage,
     ) {}
 
     public function toArray(): array
     {
         return [
             'fragility' => $this->fragility->toArray(),
-            'bus_factor' => $this->busFactor->toArray(),
-            'team' => $this->team->toArray(),
+            'team_availability' => $this->teamAvailability->toArray(),
+            'knowledge_coverage' => $this->knowledgeCoverage->toArray(),
         ];
     }
 }

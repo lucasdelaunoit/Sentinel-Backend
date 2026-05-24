@@ -24,6 +24,10 @@ class User extends Authenticatable
         'email',
         'password',
         'title',
+        'criticality_raw',
+        'bus_factor_in_org_raw',
+        'skills_count',
+        'active_projects_count',
     ];
 
     protected $hidden = [

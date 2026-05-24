@@ -9,11 +9,11 @@ use Illuminate\Console\Command;
 class RecalcAllProjectsCommand extends Command
 {
     protected $signature   = 'sentinel:recalc-all {--queue : Dispatch to queue instead of running sync}';
-    protected $description = 'Recompute fragility / bus_factor for every non-archived project. Runs sync by default.';
+    protected $description = 'Recompute fragility / team_availability / knowledge_coverage for every non-archived project. Runs sync by default.';
 
     public function handle(): int
     {
-        $projects = Project::query()->whereNull('archived_at')->get(['id', 'name', 'started_at', 'deadline', 'paused_at', 'completed_at', 'archived_at', 'fragility_raw', 'bus_factor']);
+        $projects = Project::query()->whereNull('archived_at')->get(['id', 'name', 'started_at', 'deadline', 'paused_at', 'completed_at', 'archived_at', 'fragility_raw', 'team_availability_raw', 'knowledge_coverage_raw']);
         $useQueue = (bool) $this->option('queue');
 
         if ($projects->isEmpty()) {
