@@ -13,6 +13,7 @@ final readonly class ProjectStats
         public Stat $fragility,
         public Stat $teamAvailability,
         public Stat $knowledgeCoverage,
+        public Stat $deadlineCountdown,
     ) {}
 
     public function toArray(): array
@@ -21,6 +22,7 @@ final readonly class ProjectStats
             'fragility' => $this->fragility->toArray(),
             'team_availability' => $this->teamAvailability->toArray(),
             'knowledge_coverage' => $this->knowledgeCoverage->toArray(),
+            'deadline_countdown' => $this->deadlineCountdown->toArray(),
         ];
     }
 }

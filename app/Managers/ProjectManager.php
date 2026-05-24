@@ -107,7 +107,7 @@ class ProjectManager
      * </summary>
      *
      * @param Project $project Target project
-     * @return ProjectStats fragility, team_availability, knowledge_coverage
+     * @return ProjectStats fragility, team_availability, knowledge_coverage, deadline_countdown
      */
     public function getProjectStats(Project $project): ProjectStats
     {
@@ -115,6 +115,7 @@ class ProjectManager
             fragility: $this->projectService->getProjectFragilityStat($project),
             teamAvailability: $this->projectService->getProjectTeamAvailabilityStat($project),
             knowledgeCoverage: $this->projectService->getProjectKnowledgeCoverageStat($project),
+            deadlineCountdown: $this->projectService->getProjectDeadlineCountdownStat($project),
         );
     }
 

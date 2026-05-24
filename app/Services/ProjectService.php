@@ -141,6 +141,59 @@ class ProjectService
         return Stat::display("{$raw}%", $raw, KnowledgeCoverageScale::fromRaw($raw), "{$raw}% safe");
     }
 
+    /**
+     * <summary>
+     *  Deadline-countdown Stat for one project. Days remaining until deadline.
+     *  Severity ladder: overdue/&lt;=7d critical, &lt;=30d warning, else ok.
+     *  Completed projects return a frozen "Completed" Stat. Missing deadline returns "No deadline".
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return Stat
+     */
+    public function getProjectDeadlineCountdownStat(Project $project): Stat
+    {
+        if ($project->completed_at !== null) {
+            return new Stat('Completed', 0, Severity::OK, 'Delivered');
+        }
+
+        if ($project->deadline === null) {
+            return new Stat('No deadline', 0, Severity::OK, 'Untimed');
+        }
+
+        $days = (int) round(now()->startOfDay()->diffInDays($project->deadline->startOfDay(), false));
+
+        if ($days < 0) {
+            $overdue = abs($days);
+            return new Stat(
+                value: 'Overdue',
+                valueRaw: $days,
+                severity: Severity::CRITICAL,
+                insight: "{$overdue} day" . ($overdue > 1 ? 's' : '') . ' past deadline',
+            );
+        }
+
+        $severity = match (true) {
+            $days <= 7 => Severity::CRITICAL,
+            $days <= 30 => Severity::WARNING,
+            default => Severity::OK,
+        };
+
+        $insight = match (true) {
+            $days === 0 => 'Due today',
+            $days <= 7 => 'Crunch time',
+            $days <= 30 => 'Closing in',
+            default => 'On schedule',
+        };
+
+        return new Stat(
+            value: $days === 0 ? 'Today' : "{$days} day" . ($days > 1 ? 's' : ''),
+            valueRaw: $days,
+            severity: $severity,
+            insight: $insight,
+        );
+    }
+
     // ───────────────────────── /dashboard/stats ─────────────────────────
 
     /**
