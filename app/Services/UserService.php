@@ -401,8 +401,8 @@ class UserService
 
     /**
      * <summary>
-     *  Build the skills-count Stat for a user — reads precomputed users.skills_count.
-     *  Insight shows the number of distinct skill categories (still computed live, lightweight).
+     *  Build the skills-count Stat for a user — live count via skills relation. Insight = distinct category count.
+     *  Not cached: query is trivial (single indexed pivot count).
      * </summary>
      *
      * @param User $user Target user
@@ -410,9 +410,8 @@ class UserService
      */
     public function getUserSkillsStat(User $user): Stat
     {
-        $total = (int) $user->skills_count;
-
         $user->loadMissing('skills.category');
+        $total = $user->skills->count();
         $catCount = $user->skills
             ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
             ->count();
@@ -427,7 +426,8 @@ class UserService
 
     /**
      * <summary>
-     *  Build the active-projects-count Stat for a user — reads precomputed users.active_projects_count.
+     *  Build the active-projects-count Stat for a user — live count via projects relation filtered to active lifecycle.
+     *  Not cached: query is lightweight (indexed lifecycle cols).
      * </summary>
      *
      * @param User $user Target user
@@ -435,7 +435,13 @@ class UserService
      */
     public function getUserActiveProjectsStat(User $user): Stat
     {
-        $count = (int) $user->active_projects_count;
+        $count = $user->projects()
+            ->whereNotNull('started_at')
+            ->whereDate('started_at', '<=', now())
+            ->whereNull('paused_at')
+            ->whereNull('completed_at')
+            ->whereNull('archived_at')
+            ->count();
 
         return new Stat(
             value: $count === 0 ? 'None' : (string) $count,

@@ -26,8 +26,6 @@ class User extends Authenticatable
         'title',
         'criticality_raw',
         'bus_factor_in_org_raw',
-        'skills_count',
-        'active_projects_count',
     ];
 
     protected $hidden = [
@@ -41,7 +39,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
+            'password' => 'hashed',
         ];
     }
 

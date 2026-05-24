@@ -29,7 +29,6 @@ class ProjectFactory extends Factory
             ]),
             'description'  => fake()->sentence(),
             'fragility_raw'  => 0,
-            'bus_factor'     => 0,
             'started_at'   => $startedAt,
             'deadline'     => $deadline,
             'paused_at'    => null,

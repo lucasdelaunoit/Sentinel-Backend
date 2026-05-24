@@ -6,6 +6,11 @@ use App\DTO\Stats\UserStats;
 use App\DTO\Stats\UsersStats;
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Metrics\Calculators\UserBusFactorInOrgCalculator;
+use App\Metrics\Calculators\UserCriticalityCalculator;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricScope;
+use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -17,6 +22,9 @@ class UserManager
 {
     public function __construct(
         private readonly UserService $userService,
+        private readonly MetricSnapshotService $snapshotService,
+        private readonly UserCriticalityCalculator $criticalityCalculator,
+        private readonly UserBusFactorInOrgCalculator $busFactorInOrgCalculator,
     ) {}
 
     /**
