@@ -19,4 +19,10 @@ enum MetricKey: string
     case BusFactorInOrg = 'bus_factor_in_org';
     case SkillsCount = 'skills_count';
     case ActiveProjects = 'active_projects';
+
+    // Org-scoped (projects aggregates)
+    case ProjectsTotal = 'projects_total';
+    case ProjectsAvgFragility = 'projects_avg_fragility';
+    case ProjectsFragileCount = 'projects_fragile_count';
+    case ProjectsDeadlinePressure = 'projects_deadline_pressure';
 }

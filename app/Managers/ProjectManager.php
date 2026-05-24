@@ -84,11 +84,54 @@ class ProjectManager
 
     /**
      * <summary>
+     *  Capture the 4 org-scope projects-stats snapshots in a single transaction.
+     *  Fresh-computes each Stat via ProjectService::compute*Stat and writes one MetricSnapshot per metric.
+     *  Not wired to a trigger yet — call from a future cron / org-recalc job.
+     * </summary>
+     *
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function captureProjectsStatsSnapshots(): void
+    {
+        DB::transaction(function () {
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::ProjectsTotal,
+                $this->projectService->computeProjectsTotalStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::ProjectsAvgFragility,
+                $this->projectService->computeProjectsAvgFragilityStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::ProjectsFragileCount,
+                $this->projectService->computeProjectsFragileCountStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::ProjectsDeadlinePressure,
+                $this->projectService->computeProjectsDeadlinePressureStat(),
+            );
+        });
+    }
+
+    /**
+     * <summary>
      *  Assemble the typed ProjectsStats DTO for GET /projects/stats.
      *  Orchestrates ProjectService — one Service call per metric.
      * </summary>
      *
-     * @return ProjectsStats total, avg_fragility, fragile_count, stretched_count
+     * @return ProjectsStats total, avg_fragility, fragile_count, deadline_pressure
      */
     public function getProjectsStats(): ProjectsStats
     {
@@ -96,7 +139,7 @@ class ProjectManager
             total: $this->projectService->getProjectsTotalStat(),
             avgFragility: $this->projectService->getProjectsAvgFragilityStat(),
             fragileCount: $this->projectService->getProjectsFragileCountStat(),
-            stretchedCount: $this->projectService->getProjectsStretchedCountStat(),
+            deadlinePressure: $this->projectService->getProjectsDeadlinePressureStat(),
         );
     }
 

@@ -7,6 +7,9 @@ use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Scales\KnowledgeCoverageScale;
 use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Metrics\Severity;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricScope;
+use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
 use App\Models\Project;
 use App\Support\QueryParams;
@@ -19,18 +22,83 @@ class ProjectService
 {
     public function __construct(
         private readonly SkillCoverageService $coverageService,
+        private readonly MetricSnapshotService $snapshotService,
     ) {}
-
-    // ───────────────────────── /projects/stats ─────────────────────────
 
     /**
      * <summary>
-     *  Total non-archived projects count Stat.
+     *  Read the latest org-scope snapshot for the given metric key and rehydrate it as a Stat.
+     *  Returns a placeholder Stat when no snapshot has been captured yet.
+     * </summary>
+     *
+     * @param MetricKey $metric Snapshot key to read
+     * @return Stat
+     */
+    private function readOrgSnapshotStat(MetricKey $metric): Stat
+    {
+        $snap = $this->snapshotService->latestFor(MetricScope::Org, null, $metric);
+
+        return $snap !== null ? Stat::fromSnapshot($snap) : Stat::placeholder();
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for projects total. Read API for GET /projects/stats.
      * </summary>
      *
      * @return Stat
      */
     public function getProjectsTotalStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::ProjectsTotal);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for projects avg fragility. Read API for GET /projects/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsAvgFragilityStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::ProjectsAvgFragility);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for fragile-projects count. Read API for GET /projects/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsFragileCountStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::ProjectsFragileCount);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for deadline pressure. Read API for GET /projects/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getProjectsDeadlinePressureStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::ProjectsDeadlinePressure);
+    }
+
+    // ───────────────────────── /projects/stats ─────────────────────────
+
+    /**
+     * <summary>
+     *  Total non-archived projects count Stat — fresh SQL compute. Used by snapshot writer.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function computeProjectsTotalStat(): Stat
     {
         $total = Project::query()->whereNull('archived_at')->count();
 
@@ -49,7 +117,7 @@ class ProjectService
      *
      * @return Stat
      */
-    public function getProjectsAvgFragilityStat(): Stat
+    public function computeProjectsAvgFragilityStat(): Stat
     {
         $avg = (int) round(Project::query()->whereNull('archived_at')->avg('fragility_raw') ?? 0);
 
@@ -63,7 +131,7 @@ class ProjectService
      *
      * @return Stat
      */
-    public function getProjectsFragileCountStat(): Stat
+    public function computeProjectsFragileCountStat(): Stat
     {
         $count = Project::query()->whereNull('archived_at')->where('fragility_raw', '>', 60)->count();
 
@@ -77,20 +145,39 @@ class ProjectService
 
     /**
      * <summary>
-     *  Count of stretched projects (fragility_raw 41-60). Severity WARNING when any, OK otherwise.
+     *  Deadline-pressure Stat — count of non-archived, non-completed projects with deadline in next 14 days.
+     *  Tier label by count: 0 None · 1-2 Low · 3-4 Moderate · 5+ High.
+     *  Severity: 0 ok · 1-4 warning · 5+ critical.
      * </summary>
      *
      * @return Stat
      */
-    public function getProjectsStretchedCountStat(): Stat
+    public function computeProjectsDeadlinePressureStat(): Stat
     {
-        $count = Project::query()->whereNull('archived_at')->whereBetween('fragility_raw', [41, 60])->count();
+        $today = now()->startOfDay();
+        $horizon = $today->copy()->addDays(14);
+
+        $count = Project::query()
+            ->whereNull('archived_at')
+            ->whereNull('completed_at')
+            ->whereNotNull('deadline')
+            ->whereBetween('deadline', [$today->toDateString(), $horizon->toDateString()])
+            ->count();
+
+        [$label, $severity] = match (true) {
+            $count >= 5 => ['High', Severity::CRITICAL],
+            $count >= 3 => ['Moderate', Severity::WARNING],
+            $count >= 1 => ['Low', Severity::WARNING],
+            default => ['None', Severity::OK],
+        };
 
         return new Stat(
-            value: $count === 0 ? 'None' : (string) $count,
+            value: $label,
             valueRaw: $count,
-            severity: $count > 0 ? Severity::WARNING : Severity::OK,
-            insight: $count > 0 ? 'Fragility 41-60' : null,
+            severity: $severity,
+            insight: $count > 0
+                ? "{$count} deadline" . ($count > 1 ? 's' : '') . ' in the next 14 days'
+                : 'No deadlines in the next 14 days',
         );
     }
 

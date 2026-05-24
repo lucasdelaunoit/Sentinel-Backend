@@ -13,7 +13,7 @@ final readonly class ProjectsStats
         public Stat $total,
         public Stat $avgFragility,
         public Stat $fragileCount,
-        public Stat $stretchedCount,
+        public Stat $deadlinePressure,
     ) {}
 
     public function toArray(): array
@@ -22,7 +22,7 @@ final readonly class ProjectsStats
             'total' => $this->total->toArray(),
             'avg_fragility' => $this->avgFragility->toArray(),
             'fragile_count' => $this->fragileCount->toArray(),
-            'stretched_count' => $this->stretchedCount->toArray(),
+            'deadline_pressure' => $this->deadlinePressure->toArray(),
         ];
     }
 }
