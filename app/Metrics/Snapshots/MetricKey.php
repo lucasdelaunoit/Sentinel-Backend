@@ -25,4 +25,10 @@ enum MetricKey: string
     case ProjectsAvgFragility = 'projects_avg_fragility';
     case ProjectsFragileCount = 'projects_fragile_count';
     case ProjectsDeadlinePressure = 'projects_deadline_pressure';
+
+    // Org-scoped (users aggregates)
+    case UsersTotal = 'users_total';
+    case UsersAvailable = 'users_available';
+    case UsersCritical = 'users_critical';
+    case UsersUniqueSkillHolders = 'users_unique_skill_holders';
 }

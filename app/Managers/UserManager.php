@@ -181,6 +181,49 @@ class UserManager
 
     /**
      * <summary>
+     *  Capture the 4 org-scope users-stats snapshots in a single transaction.
+     *  Fresh-computes each Stat via UserService::compute*Stat and writes one MetricSnapshot per metric.
+     *  Not wired to a trigger yet — call from a future cron / org-recalc job.
+     * </summary>
+     *
+     * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function captureUsersStatsSnapshots(): void
+    {
+        DB::transaction(function () {
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::UsersTotal,
+                $this->userService->computeUsersTotalStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::UsersAvailable,
+                $this->userService->computeUsersAvailableStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::UsersCritical,
+                $this->userService->computeUsersCriticalStat(),
+            );
+
+            $this->snapshotService->captureSnapshot(
+                MetricScope::Org,
+                null,
+                MetricKey::UsersUniqueSkillHolders,
+                $this->userService->computeUsersUniqueSkillHoldersStat(),
+            );
+        });
+    }
+
+    /**
+     * <summary>
      *  Assemble the typed UsersStats DTO for GET /users/stats.
      *  Orchestrates UserService — one Service call per metric.
      * </summary>

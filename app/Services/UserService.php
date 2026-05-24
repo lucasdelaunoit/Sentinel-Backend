@@ -5,6 +5,9 @@ namespace App\Services;
 use App\Enums\UserStatus;
 use App\Metrics\Scales\CriticalityScale;
 use App\Metrics\Severity;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricScope;
+use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
 use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Models\User;
@@ -20,7 +23,24 @@ class UserService
 {
     public function __construct(
         private readonly RiskCalculationService $riskService,
+        private readonly MetricSnapshotService $snapshotService,
     ) {}
+
+    /**
+     * <summary>
+     *  Read the latest org-scope snapshot for the given metric key and rehydrate it as a Stat.
+     *  Returns a placeholder Stat when no snapshot has been captured yet.
+     * </summary>
+     *
+     * @param MetricKey $metric Snapshot key to read
+     * @return Stat
+     */
+    private function readOrgSnapshotStat(MetricKey $metric): Stat
+    {
+        $snap = $this->snapshotService->latestFor(MetricScope::Org, null, $metric);
+
+        return $snap !== null ? Stat::fromSnapshot($snap) : Stat::placeholder();
+    }
 
     /**
      * <summary>
@@ -197,12 +217,12 @@ class UserService
 
     /**
      * <summary>
-     *  Total users count Stat.
+     *  Total users count Stat — fresh SQL compute. Used by snapshot writer.
      * </summary>
      *
      * @return Stat
      */
-    public function getUsersTotalStat(): Stat
+    public function computeUsersTotalStat(): Stat
     {
         $total = User::count();
 
@@ -221,7 +241,7 @@ class UserService
      *
      * @return Stat
      */
-    public function getUsersAvailableStat(): Stat
+    public function computeUsersAvailableStat(): Stat
     {
         $today = now()->toDateString();
         $total = User::count();
@@ -241,18 +261,15 @@ class UserService
 
     /**
      * <summary>
-     *  Critical-users Stat — count of users with criticality score &gt;= 50.
-     *  TODO(snapshot): replace per-user loop with a precomputed users.criticality_score column once cron lands.
+     *  Critical-users Stat — count of users with cached criticality_raw &gt;= 50.
+     *  Reads the precomputed column rather than re-walking the matrix per user.
      * </summary>
      *
      * @return Stat
      */
-    public function getCriticalUsersStat(): Stat
+    public function computeUsersCriticalStat(): Stat
     {
-        $count = User::with(['skills', 'projects.skillRequirements', 'projects.users.skills', 'projects.users.absences'])
-            ->get()
-            ->filter(fn(User $u) => $this->riskService->computeUserCriticality($u)['score'] >= 50)
-            ->count();
+        $count = User::query()->where('criticality_raw', '>=', 50)->count();
 
         return new Stat(
             value: $count === 0 ? 'Safe' : "{$count} at-risk",
@@ -269,7 +286,7 @@ class UserService
      *
      * @return Stat
      */
-    public function getUniqueSkillHoldersStat(): Stat
+    public function computeUsersUniqueSkillHoldersStat(): Stat
     {
         $count = User::query()
             ->whereHas('skills', function ($q) {
@@ -288,6 +305,54 @@ class UserService
             severity: $count > 0 ? Severity::WARNING : Severity::OK,
             insight: 'Skill held by one user',
         );
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for users total. Read API for GET /users/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getUsersTotalStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::UsersTotal);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for users available today. Read API for GET /users/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getUsersAvailableStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::UsersAvailable);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for critical-users count. Read API for GET /users/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getCriticalUsersStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::UsersCritical);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for unique-skill-holders count. Read API for GET /users/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getUniqueSkillHoldersStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::UsersUniqueSkillHolders);
     }
 
     // ─────────────────────── /dashboard/stats ───────────────────────
