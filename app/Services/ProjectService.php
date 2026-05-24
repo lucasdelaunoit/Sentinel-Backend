@@ -291,7 +291,7 @@ class ProjectService
      *
      * @return Stat
      */
-    public function getWorstFragilityStat(): Stat
+    public function computeWorstFragilityStat(): Stat
     {
         $scores = Project::active()->pluck('fragility_raw');
 
@@ -313,13 +313,12 @@ class ProjectService
 
     /**
      * <summary>
-     *  Knowledge-coverage Stat — org-wide % of required skills currently 'safe'.
-     *  TODO(snapshot): swap live coverage walk for a precomputed org metric snapshot once cron lands.
+     *  Knowledge-coverage Stat — org-wide % of required skills currently 'safe'. Fresh compute, used by snapshot writer.
      * </summary>
      *
      * @return Stat
      */
-    public function getKnowledgeCoverageStat(): Stat
+    public function computeKnowledgeCoverageStat(): Stat
     {
         $projects = Project::active()
             ->with(['skillRequirements', 'users.skills', 'users.absences'])
@@ -350,15 +349,19 @@ class ProjectService
     /**
      * <summary>
      *  Absence-impact Stat — count of skills that flipped to 'uncovered' because of today's absences.
-     *  Caller passes absent user ids — keeps this service stateless about "who is away today".
-     *  TODO(snapshot): swap live diff for a precomputed org metric snapshot once cron lands.
+     *  Resolves today's absent user ids inline (no caller param). Fresh compute, used by snapshot writer.
      * </summary>
      *
-     * @param array<int> $absentUserIds User ids absent today
      * @return Stat
      */
-    public function getAbsenceImpactStat(array $absentUserIds): Stat
+    public function computeAbsenceImpactStat(): Stat
     {
+        $today = now()->toDateString();
+        $absentUserIds = \App\Models\User::whereHas('absences', fn($q) => $q
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+        )->pluck('id')->all();
+
         if (empty($absentUserIds)) {
             return Stat::fromScale(AbsenceImpactScale::fromRaw(0), 0, 'No impact from absences');
         }
@@ -387,6 +390,42 @@ class ProjectService
             : 'No impact from absences';
 
         return Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $insight);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for dashboard worst-fragility. Read API for GET /dashboard/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getWorstFragilityStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::DashboardWorstFragility);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for dashboard knowledge-coverage. Read API for GET /dashboard/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getKnowledgeCoverageStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::DashboardKnowledgeCoverage);
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for dashboard absence-impact. Read API for GET /dashboard/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getAbsenceImpactStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::DashboardAbsenceImpact);
     }
 
     /**

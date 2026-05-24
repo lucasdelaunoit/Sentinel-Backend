@@ -383,7 +383,7 @@ class UserService
      *
      * @return Stat
      */
-    public function getTeamAvailabilityStat(): Stat
+    public function computeTeamAvailabilityStat(): Stat
     {
         $today = now()->toDateString();
         $total = User::count();
@@ -406,6 +406,18 @@ class UserService
             TeamAvailabilityScale::fromRaw($pct),
             $insight,
         );
+    }
+
+    /**
+     * <summary>
+     *  Latest org-snapshot for dashboard team-availability. Read API for GET /dashboard/stats.
+     * </summary>
+     *
+     * @return Stat
+     */
+    public function getTeamAvailabilityStat(): Stat
+    {
+        return $this->readOrgSnapshotStat(MetricKey::DashboardTeamAvailability);
     }
 
     /**

@@ -31,4 +31,10 @@ enum MetricKey: string
     case UsersAvailable = 'users_available';
     case UsersCritical = 'users_critical';
     case UsersUniqueSkillHolders = 'users_unique_skill_holders';
+
+    // Org-scoped (dashboard aggregates)
+    case DashboardWorstFragility = 'dashboard_worst_fragility';
+    case DashboardKnowledgeCoverage = 'dashboard_knowledge_coverage';
+    case DashboardTeamAvailability = 'dashboard_team_availability';
+    case DashboardAbsenceImpact = 'dashboard_absence_impact';
 }
