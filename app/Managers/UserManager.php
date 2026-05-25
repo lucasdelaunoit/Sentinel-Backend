@@ -6,11 +6,13 @@ use App\DTO\Stats\UserStats;
 use App\DTO\Stats\UsersStats;
 use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
-use App\Metrics\Calculators\UserBusFactorInOrgCalculator;
-use App\Metrics\Calculators\UserCriticalityCalculator;
-use App\Metrics\Snapshots\MetricKey;
-use App\Metrics\Snapshots\MetricScope;
-use App\Metrics\Snapshots\MetricSnapshotService;
+use App\Metrics\Calculators\BusFactorCalculator;
+use App\Metrics\Calculators\CriticalityCalculator;
+use App\Metrics\Calculators\UniqueSkillHoldersCalculator;
+use App\Metrics\Calculators\UserActiveProjectsCalculator;
+use App\Metrics\Calculators\UserSkillsCountCalculator;
+use App\Metrics\Calculators\UsersAvailableCalculator;
+use App\Metrics\Calculators\UsersTotalCalculator;
 use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,9 +24,13 @@ class UserManager
 {
     public function __construct(
         private readonly UserService $userService,
-        private readonly MetricSnapshotService $snapshotService,
-        private readonly UserCriticalityCalculator $criticalityCalculator,
-        private readonly UserBusFactorInOrgCalculator $busFactorInOrgCalculator,
+        private readonly CriticalityCalculator $criticalityCalculator,
+        private readonly BusFactorCalculator $busFactorCalculator,
+        private readonly UserSkillsCountCalculator $userSkillsCountCalculator,
+        private readonly UserActiveProjectsCalculator $userActiveProjectsCalculator,
+        private readonly UsersTotalCalculator $usersTotalCalculator,
+        private readonly UsersAvailableCalculator $usersAvailableCalculator,
+        private readonly UniqueSkillHoldersCalculator $uniqueSkillHoldersCalculator,
     ) {}
 
     /**
@@ -181,45 +187,37 @@ class UserManager
 
     /**
      * <summary>
-     *  Capture the 4 org-scope users-stats snapshots in a single transaction.
-     *  Fresh-computes each Stat via UserService::compute*Stat and writes one MetricSnapshot per metric.
+     *  Capture the 4 user-scope snapshots for one user. Each Calculator owns its own transaction.
+     *  Not wired to a trigger yet — call from a future recalc job / observer.
+     * </summary>
+     *
+     * @param User $user
+     * @return void
+     * @throws Throwable When any Calculator transaction fails
+     */
+    public function captureUserStatsSnapshots(User $user): void
+    {
+        $this->criticalityCalculator->forUser($user);
+        $this->busFactorCalculator->forUser($user);
+        $this->userSkillsCountCalculator->forUser($user);
+        $this->userActiveProjectsCalculator->forUser($user);
+    }
+
+    /**
+     * <summary>
+     *  Capture the 4 org-scope users-stats snapshots. Each Calculator owns its own transaction.
      *  Not wired to a trigger yet — call from a future cron / org-recalc job.
      * </summary>
      *
      * @return void
-     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     * @throws Throwable When any Calculator transaction fails
      */
     public function captureUsersStatsSnapshots(): void
     {
-        DB::transaction(function () {
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::UsersTotal,
-                $this->userService->computeUsersTotalStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::UsersAvailable,
-                $this->userService->computeUsersAvailableStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::UsersCritical,
-                $this->userService->computeUsersCriticalStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::UsersUniqueSkillHolders,
-                $this->userService->computeUsersUniqueSkillHoldersStat(),
-            );
-        });
+        $this->usersTotalCalculator->forOrg();
+        $this->usersAvailableCalculator->forOrg();
+        $this->criticalityCalculator->forOrg();
+        $this->uniqueSkillHoldersCalculator->forOrg();
     }
 
     /**

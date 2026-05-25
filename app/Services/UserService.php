@@ -22,7 +22,7 @@ use Spatie\QueryBuilder\QueryBuilder;
 class UserService
 {
     public function __construct(
-        private readonly RiskCalculationService $riskService,
+        private readonly \App\Metrics\Calculators\CriticalityCalculator $criticalityCalculator,
         private readonly MetricSnapshotService $snapshotService,
     ) {}
 
@@ -217,98 +217,6 @@ class UserService
 
     /**
      * <summary>
-     *  Total users count Stat — fresh SQL compute. Used by snapshot writer.
-     * </summary>
-     *
-     * @return Stat
-     */
-    public function computeUsersTotalStat(): Stat
-    {
-        $total = User::count();
-
-        return new Stat(
-            value: "{$total} " . ($total === 1 ? 'user' : 'users'),
-            valueRaw: $total,
-            severity: Severity::OK,
-            insight: 'Headcount',
-        );
-    }
-
-    /**
-     * <summary>
-     *  Available-today Stat — total minus users absent today. WARNING when anyone away.
-     * </summary>
-     *
-     * @return Stat
-     */
-    public function computeUsersAvailableStat(): Stat
-    {
-        $today = now()->toDateString();
-        $total = User::count();
-        $away = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
-        $available = $total - $away;
-
-        return new Stat(
-            value: "{$available} available",
-            valueRaw: $available,
-            severity: $away > 0 ? Severity::WARNING : Severity::OK,
-            insight: $away > 0 ? "{$away} away today" : 'All present',
-        );
-    }
-
-    /**
-     * <summary>
-     *  Critical-users Stat — count of users with cached criticality_raw &gt;= 50.
-     *  Reads the precomputed column rather than re-walking the matrix per user.
-     * </summary>
-     *
-     * @return Stat
-     */
-    public function computeUsersCriticalStat(): Stat
-    {
-        $count = User::query()->where('criticality_raw', '>=', 50)->count();
-
-        return new Stat(
-            value: $count === 0 ? 'Safe' : "{$count} at-risk",
-            valueRaw: $count,
-            severity: $count > 0 ? Severity::CRITICAL : Severity::OK,
-            insight: 'Criticality ≥ 50',
-        );
-    }
-
-    /**
-     * <summary>
-     *  Unique skill holders Stat — count of users who hold at least one skill no one else holds org-wide.
-     * </summary>
-     *
-     * @return Stat
-     */
-    public function computeUsersUniqueSkillHoldersStat(): Stat
-    {
-        $count = User::query()
-            ->whereHas('skills', function ($q) {
-                $q->whereIn('skills.id', function ($sub) {
-                    $sub->from('user_skills')
-                        ->select('skill_id')
-                        ->groupBy('skill_id')
-                        ->havingRaw('count(distinct user_id) = 1');
-                });
-            })
-            ->count();
-
-        return new Stat(
-            value: "{$count} " . ($count === 1 ? 'sole holder' : 'sole holders'),
-            valueRaw: $count,
-            severity: $count > 0 ? Severity::WARNING : Severity::OK,
-            insight: 'Skill held by one user',
-        );
-    }
-
-    /**
-     * <summary>
      *  Latest org-snapshot for users total. Read API for GET /users/stats.
      * </summary>
      *
@@ -377,39 +285,6 @@ class UserService
 
     /**
      * <summary>
-     *  Team-availability Stat for the dashboard — today's available/total headcount.
-     *  critical_absent counts distinct absent users whose active project has bus_factor &lt;= 1.
-     * </summary>
-     *
-     * @return Stat
-     */
-    public function computeTeamAvailabilityStat(): Stat
-    {
-        $today = now()->toDateString();
-        $total = User::count();
-
-        $absent = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
-
-        $available = $total - $absent;
-        $pct = $total > 0 ? (int) round(($available / $total) * 100) : 100;
-
-        $insight = $absent > 0
-            ? "{$absent} employee" . ($absent > 1 ? 's' : '') . ' absent'
-            : 'Fully operational';
-
-        return Stat::display(
-            "{$available}/{$total}",
-            $pct,
-            TeamAvailabilityScale::fromRaw($pct),
-            $insight,
-        );
-    }
-
-    /**
-     * <summary>
      *  Latest org-snapshot for dashboard team-availability. Read API for GET /dashboard/stats.
      * </summary>
      *
@@ -431,7 +306,7 @@ class UserService
      */
     public function getUserCriticality(User $user): array
     {
-        return $this->riskService->computeUserCriticality($user);
+        return $this->criticalityCalculator->computeRawForUser($user);
     }
 
     /**

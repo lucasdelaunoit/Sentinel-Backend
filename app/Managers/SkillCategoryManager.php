@@ -3,9 +3,9 @@
 namespace App\Managers;
 
 use App\Models\SkillCategory;
-use App\Services\RiskCalculationService;
 use App\Services\SkillCategoryService;
 use App\Services\SkillService;
+use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -13,9 +13,8 @@ use Throwable;
 class SkillCategoryManager
 {
     public function __construct(
-        private readonly RiskCalculationService  $riskService,
-        private readonly SkillCategoryService    $skillCategoryService,
-        private readonly SkillService            $skillService,
+        private readonly SkillCategoryService $skillCategoryService,
+        private readonly SkillService $skillService,
     ) {}
 
     public function getAgileSkillCategories(): Collection
@@ -65,9 +64,9 @@ class SkillCategoryManager
     public function getKCI(SkillCategory $category): array
     {
         return [
-            'category_id'   => $category->id,
+            'category_id' => $category->id,
             'category_name' => $category->name,
-            'kci'           => $this->riskService->computeKCI($category),
+            'kci' => $this->skillCategoryService->getSkillCategoryKCI($category),
         ];
     }
 }

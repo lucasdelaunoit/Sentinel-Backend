@@ -5,15 +5,16 @@ namespace App\Managers;
 use App\DTO\Stats\ProjectsStats;
 use App\DTO\Stats\ProjectStats;
 use App\Jobs\RecalculateProjectRiskJob;
+use App\Metrics\Calculators\AbsenceImpactCalculator;
 use App\Metrics\Calculators\BusFactorCalculator;
+use App\Metrics\Calculators\DeadlineCountdownCalculator;
+use App\Metrics\Calculators\DeadlinePressureCalculator;
 use App\Metrics\Calculators\FragilityCalculator;
 use App\Metrics\Calculators\KnowledgeCoverageCalculator;
+use App\Metrics\Calculators\ProjectsTotalCalculator;
 use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\Scales\FragilityScale;
-use App\Metrics\Snapshots\MetricKey;
-use App\Metrics\Snapshots\MetricScope;
 use App\Models\Project;
-use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Services\ProjectService;
 use App\Services\SkillCoverageService;
 use App\Support\QueryParams;
@@ -26,11 +27,14 @@ class ProjectManager
     public function __construct(
         private readonly SkillCoverageService $coverageService,
         private readonly ProjectService $projectService,
-        private readonly MetricSnapshotService $snapshotService,
         private readonly FragilityCalculator $fragilityCalculator,
         private readonly BusFactorCalculator $busFactorCalculator,
         private readonly TeamAvailabilityCalculator $teamAvailabilityCalculator,
         private readonly KnowledgeCoverageCalculator $knowledgeCoverageCalculator,
+        private readonly AbsenceImpactCalculator $absenceImpactCalculator,
+        private readonly DeadlineCountdownCalculator $deadlineCountdownCalculator,
+        private readonly ProjectsTotalCalculator $projectsTotalCalculator,
+        private readonly DeadlinePressureCalculator $deadlinePressureCalculator,
     ) {}
 
     /**
@@ -46,83 +50,30 @@ class ProjectManager
      */
     public function recalculateProjectMetrics(Project $project): void
     {
-        $fragilityRaw = (int) round($this->fragilityCalculator->calculate($project));
-        $teamAvailRaw = (int) round($this->teamAvailabilityCalculator->calculate($project));
-        $knowledgeRaw = (int) round($this->knowledgeCoverageCalculator->calculate($project));
-
-        DB::transaction(function () use ($project, $fragilityRaw, $teamAvailRaw, $knowledgeRaw) {
-            $project->update([
-                'fragility_raw' => $fragilityRaw,
-                'team_availability_raw' => $teamAvailRaw,
-                'knowledge_coverage_raw' => $knowledgeRaw,
-            ]);
-
-            $project->refresh();
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Project,
-                $project->id,
-                MetricKey::Fragility,
-                $this->projectService->getProjectFragilityStat($project),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Project,
-                $project->id,
-                MetricKey::TeamAvailability,
-                $this->projectService->getProjectTeamAvailabilityStat($project),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Project,
-                $project->id,
-                MetricKey::KnowledgeCoverage,
-                $this->projectService->getProjectKnowledgeCoverageStat($project),
-            );
-        });
+        // Each Calculator owns its own MetricsManager-backed transaction (col update + snapshot).
+        // Order: leaf metrics first so FragilityCalculator can read cached cols if it wants to.
+        $this->busFactorCalculator->forProject($project);
+        $this->teamAvailabilityCalculator->forProject($project);
+        $this->knowledgeCoverageCalculator->forProject($project);
+        $this->absenceImpactCalculator->forProject($project);
+        $this->fragilityCalculator->forProject($project);
+        $this->deadlineCountdownCalculator->forProject($project);
     }
 
     /**
      * <summary>
-     *  Capture the 4 org-scope projects-stats snapshots in a single transaction.
-     *  Fresh-computes each Stat via ProjectService::compute*Stat and writes one MetricSnapshot per metric.
+     *  Capture the org-scope projects-stats snapshots. Each Calculator owns its own transaction.
      *  Not wired to a trigger yet — call from a future cron / org-recalc job.
      * </summary>
      *
      * @return void
-     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     * @throws Throwable When the underlying DB transactions fail
      */
     public function captureProjectsStatsSnapshots(): void
     {
-        DB::transaction(function () {
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::ProjectsTotal,
-                $this->projectService->computeProjectsTotalStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::ProjectsAvgFragility,
-                $this->projectService->computeProjectsAvgFragilityStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::ProjectsFragileCount,
-                $this->projectService->computeProjectsFragileCountStat(),
-            );
-
-            $this->snapshotService->captureSnapshot(
-                MetricScope::Org,
-                null,
-                MetricKey::ProjectsDeadlinePressure,
-                $this->projectService->computeProjectsDeadlinePressureStat(),
-            );
-        });
+        $this->projectsTotalCalculator->forOrg();
+        $this->fragilityCalculator->forOrg(); // writes ProjectsAvgFragility + ProjectsFragileCount + DashboardWorstFragility
+        $this->deadlinePressureCalculator->forOrg();
     }
 
     /**

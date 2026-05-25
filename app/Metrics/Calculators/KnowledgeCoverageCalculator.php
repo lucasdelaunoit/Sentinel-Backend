@@ -2,45 +2,113 @@
 
 namespace App\Metrics\Calculators;
 
+use App\Managers\MetricsManager;
+use App\Metrics\Scales\KnowledgeCoverageScale;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricSnapshot;
+use App\Metrics\Stat;
 use App\Models\Project;
 use App\Services\SkillCoverageService;
 
 /**
- * Raw knowledge-coverage score (0-100) for a project.
+ * Knowledge-coverage metric — % of required skills with status 'safe' (siloed / uncovered count against).
  *
- * Score = % of required skills with status === 'safe'. Siloed and uncovered
- * skills both count against coverage.
- *
- * Accepts optional $absentUserIds so the same code path serves the live state
- * AND simulation runs (virtual absence roster).
+ * Scopes:
+ *  - forProject — per-project %. Persists projects.knowledge_coverage_raw + snapshot.
+ *  - forOrg     — org-wide aggregate over active projects' matrices. Persists snapshot MetricKey::DashboardKnowledgeCoverage.
  */
 class KnowledgeCoverageCalculator
 {
     public function __construct(
         private readonly SkillCoverageService $coverage,
+        private readonly MetricsManager $metricsManager,
     ) {}
 
     /**
      * <summary>
-     *  Compute the raw knowledge-coverage score (float 0-100) for a project.
+     *  CORE math. Safe count over total required skills. Returns 100.0 when total == 0.
      * </summary>
      *
-     * @param Project $project Target project
-     * @param array<int> $absentUserIds Virtual absence roster (simulation). Empty for live state.
+     * @param int $safe
+     * @param int $total
      * @return float
      */
-    public function calculate(Project $project, array $absentUserIds = []): float
+    private function calculateCore(int $safe, int $total): float
+    {
+        if ($total === 0) return 100.0;
+        return ($safe / $total) * 100;
+    }
+
+    /**
+     * <summary>
+     *  Pure raw % safe for a project.
+     * </summary>
+     *
+     * @param Project $project
+     * @param array<int> $absentUserIds
+     * @return float
+     */
+    public function computeRawForProject(Project $project, array $absentUserIds = []): float
     {
         $matrix = $this->coverage->getCoverage($project, $absentUserIds);
         $total = count($matrix);
-
-        if ($total === 0) return 100.0;
-
         $safe = 0;
         foreach ($matrix as $row) {
             if ($row['status'] === 'safe') $safe++;
         }
+        return $this->calculateCore($safe, $total);
+    }
 
-        return ($safe / $total) * 100;
+    /**
+     * <summary>
+     *  Persist project knowledge-coverage — updates projects.knowledge_coverage_raw + appends snapshot.
+     * </summary>
+     *
+     * @param Project $project
+     * @param array<int> $absentUserIds
+     * @return MetricSnapshot
+     * @throws \Throwable
+     */
+    public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
+    {
+        $raw = (int) round($this->computeRawForProject($project, $absentUserIds));
+        $stat = Stat::display("{$raw}%", $raw, KnowledgeCoverageScale::fromRaw($raw), "{$raw}% safe");
+
+        return $this->metricsManager->persistProjectMetric($project, 'knowledge_coverage_raw', MetricKey::KnowledgeCoverage, $stat);
+    }
+
+    /**
+     * <summary>
+     *  Persist org-wide dashboard knowledge-coverage snapshot. Walks every active project's matrix.
+     *  Heavy compute — meant to run from snapshot writer / cron, not synchronously.
+     * </summary>
+     *
+     * @return MetricSnapshot
+     * @throws \Throwable
+     */
+    public function forOrg(): MetricSnapshot
+    {
+        $projects = Project::active()
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
+            ->get();
+
+        $total = 0;
+        $safe = 0;
+        foreach ($projects as $project) {
+            foreach ($this->coverage->getCoverage($project) as $skill) {
+                $total++;
+                if ($skill['status'] === 'safe') $safe++;
+            }
+        }
+
+        $pct = (int) round($this->calculateCore($safe, $total));
+        $underCovered = $total - $safe;
+        $insight = $underCovered > 0
+            ? "{$underCovered} skill" . ($underCovered > 1 ? 's' : '') . ' under-covered'
+            : 'All skills covered';
+
+        $stat = Stat::display("{$pct}%", $pct, KnowledgeCoverageScale::fromRaw($pct), $insight);
+
+        return $this->metricsManager->persistOrgMetric(MetricKey::DashboardKnowledgeCoverage, $stat);
     }
 }

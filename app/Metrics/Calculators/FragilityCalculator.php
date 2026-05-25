@@ -2,20 +2,27 @@
 
 namespace App\Metrics\Calculators;
 
+use App\Managers\MetricsManager;
+use App\Metrics\Scales\FragilityScale;
+use App\Metrics\Snapshots\MetricKey;
+use App\Metrics\Snapshots\MetricSnapshot;
+use App\Metrics\Severity;
+use App\Metrics\Stat;
 use App\Models\OrganizationSetting;
 use App\Models\Project;
 use App\Services\OrganizationSettingService;
 use App\Services\RuleEvaluator;
 use App\Services\RuleService;
 use App\Services\SkillCoverageService;
+use Illuminate\Support\Collection;
 
 /**
- * Raw fragility score (0-100) for a project. Blends bus risk, uncovered ratio,
- * silo ratio, absence impact (LAYER 1+2 per spec). Applies fragility_tolerance
- * multiplier and adds rule_penalty from violations affecting the project.
+ * Fragility metric — composite 0-100 score blending bus risk, uncovered ratio, silo ratio,
+ * absence impact, and rule violations. LAYER 1+2 per spec.
  *
- * Accepts optional $absentUserIds so the same code path serves the live state
- * AND simulation runs (virtual absence roster).
+ * Scopes:
+ *  - forProject — per-project fragility. Persists projects.fragility_raw + snapshot.
+ *  - forOrg     — writes 3 org snapshots in one transaction (avg fragility, fragile count, worst fragility).
  */
 class FragilityCalculator
 {
@@ -23,39 +30,30 @@ class FragilityCalculator
         private readonly SkillCoverageService $coverage,
         private readonly OrganizationSettingService $orgSettings,
         private readonly BusFactorCalculator $busFactor,
+        private readonly MetricsManager $metricsManager,
     ) {}
 
     /**
      * <summary>
-     *  Compute the raw fragility score (float 0-100) for a project.
+     *  CORE math. Composite blend with tolerance multiplier and additive rule penalty. Clamped 0-100.
      * </summary>
      *
-     * @param Project $project Target project
-     * @param array<int> $absentUserIds Virtual absence roster (simulation). Empty for live state.
-     * @return float
+     * @param int $busRisk 0-100, higher = worse
+     * @param float $uncoveredRatio 0-1
+     * @param float $siloRatio 0-1
+     * @param float $absenceImpact 0-1
+     * @param OrganizationSetting $settings
+     * @param float $rulePenalty Additive after tolerance
+     * @return float 0-100
      */
-    public function calculate(Project $project, array $absentUserIds = []): float
-    {
-        $settings = $this->orgSettings->getOrganizationSetting();
-        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
-        $total = count($matrix);
-
-        if ($total === 0) return 0.0;
-
-        $uncovered = 0;
-        $siloed = 0;
-        foreach ($matrix as $row) {
-            if ($row['status'] === 'uncovered') $uncovered++;
-            elseif ($row['status'] === 'siloed') $siloed++;
-        }
-        $uncoveredRatio = $uncovered / $total;
-        $siloRatio = $siloed / $total;
-
-        $absenceImpact = $this->computeAbsenceImpact($project, $matrix, $absentUserIds, $settings);
-
-        $bf = $this->busFactor->calculate($project, $absentUserIds);
-        $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
-
+    private function calculateCore(
+        int $busRisk,
+        float $uncoveredRatio,
+        float $siloRatio,
+        float $absenceImpact,
+        OrganizationSetting $settings,
+        float $rulePenalty,
+    ): float {
         $wBus = (int) $settings->fragility_weight_bus_factor;
         $wUnc = (int) $settings->fragility_weight_uncovered_skills;
         $wSilo = (int) $settings->fragility_weight_silos;
@@ -76,16 +74,107 @@ class FragilityCalculator
         };
 
         $fragility = min(100.0, $fragility * $tolerance);
-        $fragility += $this->computeRulePenalty($project, $settings);
+        $fragility += $rulePenalty;
 
         return max(0.0, min(100.0, $fragility));
     }
 
     /**
-     * Newly-uncovered ratio when horizon absences are projected on top of the live state.
-     * Absences already inside $absentUserIds are part of the baseline, not "added".
+     * <summary>
+     *  Pure raw fragility score for a project. No DB writes. Reads the live coverage matrix and
+     *  composes sibling Calculators (BusFactorCalculator) for inputs.
+     * </summary>
+     *
+     * @param Project $project
+     * @param array<int> $absentUserIds
+     * @return float
      */
-    private function computeAbsenceImpact(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings): float
+    public function computeRawForProject(Project $project, array $absentUserIds = []): float
+    {
+        $settings = $this->orgSettings->getOrganizationSetting();
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
+        $total = count($matrix);
+
+        if ($total === 0) return 0.0;
+
+        $uncovered = 0;
+        $siloed = 0;
+        foreach ($matrix as $row) {
+            if ($row['status'] === 'uncovered') $uncovered++;
+            elseif ($row['status'] === 'siloed') $siloed++;
+        }
+        $uncoveredRatio = $uncovered / $total;
+        $siloRatio = $siloed / $total;
+        $absenceImpact = $this->computeAbsenceImpactRatio($project, $matrix, $absentUserIds, $settings);
+
+        $bf = $this->busFactor->computeRawForProject($project, $absentUserIds);
+        $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
+
+        $rulePenalty = $this->computeRulePenalty($project, $settings);
+
+        return $this->calculateCore($busRisk, $uncoveredRatio, $siloRatio, $absenceImpact, $settings, $rulePenalty);
+    }
+
+    /**
+     * <summary>
+     *  Persist project fragility — updates projects.fragility_raw + appends snapshot.
+     * </summary>
+     *
+     * @param Project $project
+     * @param array<int> $absentUserIds
+     * @return MetricSnapshot
+     * @throws \Throwable
+     */
+    public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
+    {
+        $raw = (int) round($this->computeRawForProject($project, $absentUserIds));
+        $stat = Stat::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: {$raw}/100");
+
+        return $this->metricsManager->persistProjectMetric($project, 'fragility_raw', MetricKey::Fragility, $stat);
+    }
+
+    /**
+     * <summary>
+     *  Persist 3 org-scope fragility snapshots in a single transaction:
+     *  ProjectsAvgFragility, ProjectsFragileCount, DashboardWorstFragility.
+     *  Reads projects.fragility_raw cached column — assumes per-project recalc ran first.
+     * </summary>
+     *
+     * @return Collection<int, MetricSnapshot>
+     * @throws \Throwable
+     */
+    public function forOrg(): Collection
+    {
+        $scores = Project::query()->whereNull('archived_at')->pluck('fragility_raw');
+        $activeScores = Project::active()->pluck('fragility_raw');
+
+        $avg = (int) round($scores->avg() ?? 0);
+        $fragile = $scores->filter(fn($v) => $v > 60)->count();
+        $worst = (int) ($activeScores->max() ?? 0);
+
+        $worstFragile = $activeScores->filter(fn($v) => $v > 60)->count();
+        $worstStretched = $activeScores->filter(fn($v) => $v > 40 && $v <= 60)->count();
+        $worstParts = [];
+        if ($worstFragile > 0) $worstParts[] = "{$worstFragile} fragile";
+        if ($worstStretched > 0) $worstParts[] = "{$worstStretched} stretched";
+        $worstInsight = empty($worstParts) ? 'All projects healthy' : implode(' · ', $worstParts);
+
+        return $this->metricsManager->persistOrgMetrics([
+            [MetricKey::ProjectsAvgFragility, Stat::fromScale(FragilityScale::fromRaw($avg), $avg, "Score: {$avg}/100")],
+            [MetricKey::ProjectsFragileCount, new Stat(
+                value: $fragile === 0 ? 'Healthy' : (string) $fragile,
+                valueRaw: $fragile,
+                severity: $fragile > 0 ? Severity::CRITICAL : Severity::OK,
+                insight: $fragile > 0 ? 'Fragility > 60' : null,
+            )],
+            [MetricKey::DashboardWorstFragility, Stat::fromScale(FragilityScale::fromRaw($worst), $worst, $worstInsight)],
+        ]);
+    }
+
+    /**
+     * Newly-uncovered ratio when horizon absences are projected on top of the live state.
+     */
+    private function computeAbsenceImpactRatio(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings): float
     {
         $total = count($baselineMatrix);
         if ($total === 0) return 0.0;
@@ -122,10 +211,6 @@ class FragilityCalculator
             ->all();
     }
 
-    /**
-     * Additive fragility penalty from rule violations affecting this project.
-     * Resolves RuleEvaluator lazily to avoid circular dependency at construction.
-     */
     private function computeRulePenalty(Project $project, OrganizationSetting $settings): float
     {
         $ruleService = app(RuleService::class);

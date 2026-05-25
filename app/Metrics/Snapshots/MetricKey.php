@@ -11,8 +11,11 @@ enum MetricKey: string
 {
     // Project-scoped
     case Fragility = 'fragility';
+    case BusFactor = 'bus_factor';
     case TeamAvailability = 'team_availability';
     case KnowledgeCoverage = 'knowledge_coverage';
+    case AbsenceImpact = 'absence_impact';
+    case DeadlineCountdown = 'deadline_countdown';
 
     // User-scoped
     case Criticality = 'criticality';

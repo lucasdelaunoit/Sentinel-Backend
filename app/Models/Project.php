@@ -23,6 +23,8 @@ class Project extends Model
         'fragility_raw',
         'team_availability_raw',
         'knowledge_coverage_raw',
+        'bus_factor',
+        'absence_impact_raw',
         'started_at',
         'deadline',
         'paused_at',
