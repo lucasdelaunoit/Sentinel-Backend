@@ -17,7 +17,6 @@ use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -248,28 +247,31 @@ class UserService
 
     /**
      * <summary>
-     *  Fetch all users with their active-today absences, mapped to status rows.
+     *  Count every user in the org. Single DB action.
+     * </summary>
+     *
+     * @return int Total user count
+     */
+    public function countAllUsers(): int
+    {
+        return User::query()->count();
+    }
+
+    /**
+     * <summary>
+     *  Count users with at least one absence active on the given date. Single DB action.
      * </summary>
      *
      * @param string $today Date string (Y-m-d)
-     * @return Collection Each item: id, name, role, initials, today_status
+     * @return int Number of users absent on that date
      */
-    public function getTodayUsers(string $today): Collection
+    public function countUsersAbsentOn(string $today): int
     {
         return User::query()
-            ->with(['absences' => fn($q) => $q
+            ->whereHas('absences', fn($q) => $q
                 ->whereDate('start_date', '<=', $today)
-                ->whereDate('end_date', '>=', $today)
-            ])
-            ->orderBy('firstname')
-            ->get()
-            ->map(fn($user) => [
-                'id' => $user->id,
-                'name' => $user->firstname . ' ' . $user->lastname,
-                'role' => $user->title,
-                'initials' => $this->deriveInitials($user->firstname . ' ' . $user->lastname),
-                'today_status' => $this->resolveUserStatus($user)->value,
-            ]);
+                ->whereDate('end_date', '>=', $today))
+            ->count();
     }
 
     // ───────────────────────── /users/stats ─────────────────────────
@@ -462,16 +464,4 @@ class UserService
         );
     }
 
-    private function resolveUserStatus(User $user): UserStatus
-    {
-        return $user->absences->isNotEmpty() ? UserStatus::Away : UserStatus::Available;
-    }
-
-    private function deriveInitials(string $name): string
-    {
-        $parts = array_filter(explode(' ', trim($name)));
-        $initials = array_map(fn($p) => strtoupper(mb_substr($p, 0, 1)), array_values($parts));
-
-        return implode('', array_slice($initials, 0, 2));
-    }
 }

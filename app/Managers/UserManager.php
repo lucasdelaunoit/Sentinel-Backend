@@ -4,7 +4,6 @@ namespace App\Managers;
 
 use App\DTO\Stats\UserStats;
 use App\DTO\Stats\UsersStats;
-use App\Enums\UserStatus;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Metrics\Calculators\CriticalityCalculator;
@@ -173,32 +172,22 @@ class UserManager
 
     /**
      * <summary>
-     *  Assemble today's team availability snapshot.
-     *  Delegates raw fetch to UserService, then computes capacity percentage and top-5 preview.
+     *  Compute the org's present-capacity percentage for today: share of users with no active absence.
+     *  Orchestrates two UserService counts (total + absent), then derives the percentage.
      * </summary>
      *
-     * @return array capacity_pct, total, employees (top-5 preview sorted by absence first)
+     * @return array{capacity_pct: int} Percentage (0–100) of users present today; 100 when the org has no users
      */
-    public function getUsersTodayStatus(): array
+    public function getUsersCapacity(): array
     {
         $today = now()->toDateString();
-        $users = $this->userService->getTodayUsers($today);
 
-        $total = $users->count();
-        $availableCount = $users->where('today_status', UserStatus::Available->value)->count();
-        $capacityPct = $total > 0 ? (int) round(($availableCount / $total) * 100) : 100;
+        $total = $this->userService->countAllUsers();
+        $absent = $this->userService->countUsersAbsentOn($today);
 
-        $statusOrder = [UserStatus::Away->value => 0, UserStatus::Available->value => 1];
-        $preview = $users
-            ->sortBy(fn($u) => $statusOrder[$u['today_status']] ?? 99)
-            ->values()
-            ->take(5);
+        $capacityPct = $total > 0 ? (int) round((($total - $absent) / $total) * 100) : 100;
 
-        return [
-            'capacity_pct' => $capacityPct,
-            'total' => $total,
-            'employees' => $preview->values()->all(),
-        ];
+        return ['capacity_pct' => $capacityPct];
     }
 
     /**

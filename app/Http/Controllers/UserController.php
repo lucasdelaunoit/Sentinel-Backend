@@ -177,14 +177,18 @@ class UserController extends Controller
 
     /**
      * <summary>
-     *  Get today's availability status for all users.
+     *  Get the org's present-capacity percentage for today (share of users with no active absence).
      * </summary>
      *
-     * @return JsonResponse capacity_pct, total, and top-5 employee preview
+     * @return JsonResponse { capacity_pct: int } — 0–100
      */
-    public function getUsersTodayStatus(): JsonResponse
+    public function getUsersCapacity(): JsonResponse
     {
-        return response()->json($this->userManager->getUsersTodayStatus());
+        // Act (Manager)
+        $capacity = $this->userManager->getUsersCapacity();
+
+        // Return (Controller)
+        return response()->json($capacity);
     }
 
     /**
