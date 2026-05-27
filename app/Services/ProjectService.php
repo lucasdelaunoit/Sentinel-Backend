@@ -28,6 +28,28 @@ class ProjectService
 
     /**
      * <summary>
+     *  Current org-wide metric baseline from cached project columns over non-archived projects:
+     *  project count plus the average fragility_raw and knowledge_coverage_raw. Used to anchor
+     *  estimated metric deltas (Upcoming Risk Events org impact). count is floored at 1 to avoid /0.
+     * </summary>
+     *
+     * @return array{count:int, avg_fragility:float, avg_knowledge_coverage:float}
+     */
+    public function getActiveProjectsMetricBaseline(): array
+    {
+        $projects = Project::query()
+            ->whereNull('archived_at')
+            ->get(['fragility_raw', 'knowledge_coverage_raw']);
+
+        return [
+            'count' => max(1, $projects->count()),
+            'avg_fragility' => (float) ($projects->avg('fragility_raw') ?? 0),
+            'avg_knowledge_coverage' => (float) ($projects->avg('knowledge_coverage_raw') ?? 0),
+        ];
+    }
+
+    /**
+     * <summary>
      *  Read the latest org-scope snapshot for the given metric key and rehydrate it as a Stat.
      *  Returns a placeholder Stat when no snapshot has been captured yet.
      * </summary>

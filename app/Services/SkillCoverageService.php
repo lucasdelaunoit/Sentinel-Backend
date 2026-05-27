@@ -21,13 +21,16 @@ class SkillCoverageService
      *  and who are not absent within absence_horizon_days. Status is uncovered (0),
      *  siloed (<= silo_threshold) or safe.
      *  $absentUserIds adds a virtual absence roster on top of real absences — used by simulations.
+     *  $presentUserIds forces users to count as available regardless of their real horizon-absence —
+     *  used to build a clean baseline isolating one person's impact (Upcoming Risk Events).
      * </summary>
      *
      * @param Project $project Target project
      * @param array<int> $absentUserIds Virtual absence roster (simulation). Empty for live state.
+     * @param array<int> $presentUserIds Users forced present, overriding their real horizon-absence.
      * @return array<int, array{skill_id:int,skill_name:string,required_level:int,employees:array<int,array{user_id:int,name:string,level:int}>,status:string}>
      */
-    public function getCoverage(Project $project, array $absentUserIds = []): array
+    public function getCoverage(Project $project, array $absentUserIds = [], array $presentUserIds = []): array
     {
         $project->loadMissing(['skillRequirements', 'users.skills', 'users.absences']);
 
@@ -38,7 +41,10 @@ class SkillCoverageService
         $today      = Carbon::today();
         $horizonEnd = (clone $today)->addDays($horizonDays);
 
-        $availableUsers = $project->users->reject(function ($user) use ($absentUserIds, $today, $horizonEnd) {
+        $availableUsers = $project->users->reject(function ($user) use ($absentUserIds, $presentUserIds, $today, $horizonEnd) {
+            if (in_array($user->id, $presentUserIds, true)) {
+                return false;
+            }
             if (in_array($user->id, $absentUserIds, true)) {
                 return true;
             }

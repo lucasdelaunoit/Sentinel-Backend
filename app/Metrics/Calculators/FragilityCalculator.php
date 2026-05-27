@@ -87,12 +87,13 @@ class FragilityCalculator
      *
      * @param Project $project
      * @param array<int> $absentUserIds
+     * @param array<int> $presentUserIds Users forced present, overriding their real horizon-absence (clean baseline isolation)
      * @return float
      */
-    public function computeRawForProject(Project $project, array $absentUserIds = []): float
+    public function computeRawForProject(Project $project, array $absentUserIds = [], array $presentUserIds = []): float
     {
         $settings = $this->orgSettings->getOrganizationSetting();
-        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds, $presentUserIds);
         $total = count($matrix);
 
         if ($total === 0) return 0.0;
@@ -105,9 +106,9 @@ class FragilityCalculator
         }
         $uncoveredRatio = $uncovered / $total;
         $siloRatio = $siloed / $total;
-        $absenceImpact = $this->computeAbsenceImpactRatio($project, $matrix, $absentUserIds, $settings);
+        $absenceImpact = $this->computeAbsenceImpactRatio($project, $matrix, $absentUserIds, $settings, $presentUserIds);
 
-        $bf = $this->busFactor->computeRawForProject($project, $absentUserIds);
+        $bf = $this->busFactor->computeRawForProject($project, $absentUserIds, $presentUserIds);
         $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
 
         $rulePenalty = $this->computeRulePenalty($project, $settings);
@@ -173,8 +174,9 @@ class FragilityCalculator
 
     /**
      * Newly-uncovered ratio when horizon absences are projected on top of the live state.
+     * $presentUserIds keeps forced-present users available in the projection (clean baseline isolation).
      */
-    private function computeAbsenceImpactRatio(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings): float
+    private function computeAbsenceImpactRatio(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings, array $presentUserIds = []): float
     {
         $total = count($baselineMatrix);
         if ($total === 0) return 0.0;
@@ -184,7 +186,7 @@ class FragilityCalculator
 
         if ($merged === $absentUserIds) return 0.0;
 
-        $with = $this->coverage->getCoverage($project, $merged);
+        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds);
         $newlyUncovered = 0;
         foreach ($with as $sid => $row) {
             if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {

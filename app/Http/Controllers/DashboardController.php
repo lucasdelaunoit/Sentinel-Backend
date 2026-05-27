@@ -6,6 +6,7 @@ use App\Http\Resources\DashboardStatsResource;
 use App\Http\Resources\KnowledgeCoverageResource;
 use App\Managers\DashboardManager;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
@@ -43,6 +44,26 @@ class DashboardController extends Controller
 
         // Return (Controller)
         return new KnowledgeCoverageResource($breakdown);
+    }
+
+    /**
+     * <summary>
+     *  Upcoming Risk Events card — upcoming absences within the horizon, each with its computed
+     *  per-project operational impact (bus factor / coverage before-after, lost skills, severity).
+     * </summary>
+     *
+     * @param Request $request horizon_days query param (defaults to 30)
+     * @return JsonResponse { generated_at, events[] }
+     */
+    public function getUpcomingRiskEvents(Request $request): JsonResponse
+    {
+        // Act (Manager)
+        $payload = $this->dashboardManager->getUpcomingRiskEvents(
+            (int) $request->integer('horizon_days', 30)
+        );
+
+        // Return (Controller)
+        return response()->json($payload);
     }
 
     // TODO : Maybe later

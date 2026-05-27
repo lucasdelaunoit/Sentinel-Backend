@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Absence;
 use App\Models\User;
 use App\Support\QueryParams;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -37,6 +39,33 @@ class AbsenceService
             ->defaultSort('-start_date')
             ->paginate($params->perPage())
             ->appends($params->rawQuery());
+    }
+
+    /**
+     * <summary>
+     *  Upcoming absences whose window opens between today and today + horizon (inclusive),
+     *  ordered by start date. Eager-loads the absent user and the data each project's coverage
+     *  matrix needs (skill requirements + teammates' skills & absences) to avoid N+1 downstream.
+     *  No status filter — the absences table has no approval column.
+     * </summary>
+     *
+     * @param int $horizonDays Forward window in days
+     * @return Collection<int, Absence> Upcoming absences with user + projects eager-loaded
+     */
+    public function getUpcomingAbsences(int $horizonDays): Collection
+    {
+        $today = Carbon::today();
+
+        return Absence::query()
+            ->with([
+                'user.projects.skillRequirements',
+                'user.projects.users.skills',
+                'user.projects.users.absences',
+            ])
+            ->whereDate('start_date', '>=', $today)
+            ->whereDate('start_date', '<=', (clone $today)->addDays($horizonDays))
+            ->orderBy('start_date')
+            ->get();
     }
 
     /**

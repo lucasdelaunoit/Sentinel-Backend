@@ -50,16 +50,18 @@ class BusFactorCalculator
 
     /**
      * <summary>
-     *  Pure raw bus factor for a project. No DB writes. Accepts virtual absence roster for simulation.
+     *  Pure raw bus factor for a project. No DB writes. Accepts virtual absence roster for simulation
+     *  and a present-override roster (users forced available, overriding their real horizon-absence).
      * </summary>
      *
      * @param Project $project
      * @param array<int> $absentUserIds
+     * @param array<int> $presentUserIds Users forced present (clean baseline isolation)
      * @return int
      */
-    public function computeRawForProject(Project $project, array $absentUserIds = []): int
+    public function computeRawForProject(Project $project, array $absentUserIds = [], array $presentUserIds = []): int
     {
-        return $this->calculateCore($this->coverage->getCoverage($project, $absentUserIds));
+        return $this->calculateCore($this->coverage->getCoverage($project, $absentUserIds, $presentUserIds));
     }
 
     /**
