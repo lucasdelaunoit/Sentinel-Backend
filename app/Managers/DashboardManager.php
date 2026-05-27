@@ -3,11 +3,13 @@
 namespace App\Managers;
 
 use App\DTO\Stats\DashboardStats;
+use App\DTO\Stats\KnowledgeCoverageBreakdown;
 use App\Metrics\Calculators\AbsenceImpactCalculator;
 use App\Metrics\Calculators\FragilityCalculator;
 use App\Metrics\Calculators\KnowledgeCoverageCalculator;
 use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Services\ProjectService;
+use App\Services\SkillCoverageService;
 use App\Services\UserService;
 use Throwable;
 
@@ -20,6 +22,7 @@ class DashboardManager
         private readonly KnowledgeCoverageCalculator $knowledgeCoverageCalculator,
         private readonly TeamAvailabilityCalculator $teamAvailabilityCalculator,
         private readonly AbsenceImpactCalculator $absenceImpactCalculator,
+        private readonly SkillCoverageService $skillCoverageService,
     ) {}
 
     /**
@@ -38,6 +41,19 @@ class DashboardManager
             teamAvailability: $this->userService->getTeamAvailabilityStat(),
             absenceImpact: $this->projectService->getAbsenceImpactStat(),
         );
+    }
+
+    /**
+     * <summary>
+     *  Per-skill-category knowledge-coverage breakdown for GET /dashboard/knowledge-coverage (competency radar).
+     *  Read-only — derives live from each active project's coverage matrix, writes no snapshot.
+     * </summary>
+     *
+     * @return KnowledgeCoverageBreakdown categories[] (one per skill category) + most_fragile
+     */
+    public function getKnowledgeCoverage(): KnowledgeCoverageBreakdown
+    {
+        return $this->skillCoverageService->getKnowledgeCoverage();
     }
 
     /**

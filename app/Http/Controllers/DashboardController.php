@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\DashboardStatsResource;
+use App\Http\Resources\KnowledgeCoverageResource;
 use App\Managers\DashboardManager;
 use Illuminate\Http\JsonResponse;
 
@@ -28,13 +29,24 @@ class DashboardController extends Controller
         return new DashboardStatsResource($stats);
     }
 
-    // TODO : Maybe later
-    public function projectsAtRiskDetail(): JsonResponse
+    /**
+     * <summary>
+     *  Competency-radar data — per-skill-category knowledge-coverage breakdown across active projects.
+     * </summary>
+     *
+     * @return KnowledgeCoverageResource categories[] (one per skill category) + most_fragile
+     */
+    public function getKnowledgeCoverage(): KnowledgeCoverageResource
     {
-        return response()->json([], 200);
+        // Act (Manager)
+        $breakdown = $this->dashboardManager->getKnowledgeCoverage();
+
+        // Return (Controller)
+        return new KnowledgeCoverageResource($breakdown);
     }
 
-    public function knowledgeCoverageDetail(): JsonResponse
+    // TODO : Maybe later
+    public function projectsAtRiskDetail(): JsonResponse
     {
         return response()->json([], 200);
     }

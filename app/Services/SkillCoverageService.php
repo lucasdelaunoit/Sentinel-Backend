@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\DTO\Stats\KnowledgeCoverageBreakdown;
 use App\Models\Project;
+use App\Models\Skill;
+use App\Models\SkillCategory;
 use Carbon\Carbon;
 
 class SkillCoverageService
@@ -91,6 +94,83 @@ class SkillCoverageService
     public function getCoverageAfterAbsence(Project $project, array $excludedUserIds): array
     {
         return $this->getCoverage($project, $excludedUserIds);
+    }
+
+    /**
+     * <summary>
+     *  Org-wide knowledge-coverage broken down per skill category — feeds the competency radar.
+     *  Every SkillCategory is a radar axis (stable even with zero requirements). Walks every active
+     *  project's coverage matrix (reuses getCoverage — the single source of truth) and buckets each
+     *  required skill into its category as safe / siloed / uncovered. coverage_pct = safe / total per
+     *  category (100 when a category has no requirements). most_fragile is the lowest-coverage
+     *  category that actually has requirements. Read-only — writes nothing.
+     * </summary>
+     *
+     * @return KnowledgeCoverageBreakdown categories[] (one per skill category) + most_fragile
+     */
+    public function getKnowledgeCoverage(): KnowledgeCoverageBreakdown
+    {
+        $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
+        $skillCategory = Skill::query()->pluck('skill_category_id', 'id');
+
+        $acc = [];
+        foreach ($categories as $category) {
+            $acc[$category->id] = [
+                'category_id' => $category->id,
+                'category_name' => $category->name,
+                'safe' => 0,
+                'siloed' => 0,
+                'uncovered' => 0,
+                'siloed_skills' => [],
+                'uncovered_skills' => [],
+            ];
+        }
+
+        $projects = Project::active()
+            ->with(['skillRequirements', 'users.skills', 'users.absences'])
+            ->get();
+
+        foreach ($projects as $project) {
+            foreach ($this->getCoverage($project) as $row) {
+                $categoryId = $skillCategory[$row['skill_id']] ?? null;
+                if ($categoryId === null || !isset($acc[$categoryId])) {
+                    continue;
+                }
+
+                $acc[$categoryId][$row['status']]++;
+                if ($row['status'] === 'siloed') {
+                    $acc[$categoryId]['siloed_skills'][$row['skill_id']] = $row['skill_name'];
+                } elseif ($row['status'] === 'uncovered') {
+                    $acc[$categoryId]['uncovered_skills'][$row['skill_id']] = $row['skill_name'];
+                }
+            }
+        }
+
+        $result = [];
+        $mostFragile = null;
+        $worstPct = null;
+        foreach ($acc as $bucket) {
+            $total = $bucket['safe'] + $bucket['siloed'] + $bucket['uncovered'];
+            $pct = $total === 0 ? 100 : (int) round(($bucket['safe'] / $total) * 100);
+
+            $result[] = [
+                'category_id' => $bucket['category_id'],
+                'category_name' => $bucket['category_name'],
+                'coverage_pct' => $pct,
+                'safe' => $bucket['safe'],
+                'siloed' => $bucket['siloed'],
+                'uncovered' => $bucket['uncovered'],
+                'siloed_skills' => array_values($bucket['siloed_skills']),
+                'uncovered_skills' => array_values($bucket['uncovered_skills']),
+            ];
+
+            if ($total > 0 && ($worstPct === null || $pct < $worstPct)) {
+                $worstPct = $pct;
+                $mostFragile = $bucket['category_name'];
+            }
+        }
+
+        return new KnowledgeCoverageBreakdown($result, $mostFragile);
     }
 
     /**
