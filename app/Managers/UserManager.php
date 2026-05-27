@@ -13,8 +13,10 @@ use App\Metrics\Calculators\UserActiveProjectsCalculator;
 use App\Metrics\Calculators\UserSkillsCountCalculator;
 use App\Metrics\Calculators\UsersAvailableCalculator;
 use App\Metrics\Calculators\UsersTotalCalculator;
+use App\Models\Project;
 use App\Models\User;
 use App\Services\UserService;
+use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +46,20 @@ class UserManager
     public function getAgileUsers(Request $request): LengthAwarePaginator
     {
         return $this->userService->getAgileUsers($request);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the paginated, filterable, sortable list of users assigned to a project via Spatie QueryBuilder.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
+     * @param Project $project Target project whose team is listed
+     * @return LengthAwarePaginator Paginated project users with department and skills.category
+     */
+    public function getAgileUsersForProject(QueryParams $params, Project $project): LengthAwarePaginator
+    {
+        return $this->userService->getAgileUsersForProject($params, $project);
     }
 
     /**

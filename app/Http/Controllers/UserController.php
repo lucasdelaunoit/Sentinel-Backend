@@ -10,8 +10,10 @@ use App\Http\Resources\UserResource;
 use App\Http\Resources\UsersStatsResource;
 use App\Http\Resources\UserStatsResource;
 use App\Managers\UserManager;
+use App\Models\Project;
 use App\Models\Skill;
 use App\Models\User;
+use App\Support\QueryParams;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -33,6 +35,24 @@ class UserController extends Controller
     public function getAgileUsers(Request $request): AnonymousResourceCollection
     {
         return UserResource::collection($this->userManager->getAgileUsers($request));
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the users assigned to a project (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @param Project $project Route-model bound project
+     * @return AnonymousResourceCollection Paginated list of project users
+     */
+    public function getAgileUsersForProject(Request $request, Project $project): AnonymousResourceCollection
+    {
+        // Act (Manager)
+        $users = $this->userManager->getAgileUsersForProject(QueryParams::fromRequest($request), $project);
+
+        // Return (Controller)
+        return UserResource::collection($users);
     }
 
     /**

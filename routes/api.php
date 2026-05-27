@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/stats', [ProjectController::class, 'getProjectStats']);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
+    Route::get('/projects/{project}/users', [UserController::class, 'getAgileUsersForProject']);
     Route::post('/projects/{project}/users', [ProjectController::class, 'attachUserToProject']);
     Route::delete('/projects/{project}/users/{user}', [ProjectController::class, 'detachUserFromProject']);
     Route::post('/projects/{project}/skills', [ProjectController::class, 'attachSkillToProject']);

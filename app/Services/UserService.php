@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\UserStatus;
+use App\Metrics\Calculators\CriticalityCalculator;
 use App\Metrics\Scales\CriticalityScale;
 use App\Metrics\Severity;
 use App\Metrics\Snapshots\MetricKey;
@@ -10,7 +11,9 @@ use App\Metrics\Snapshots\MetricScope;
 use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
 use App\Metrics\Scales\TeamAvailabilityScale;
+use App\Models\Project;
 use App\Models\User;
+use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -22,7 +25,7 @@ use Spatie\QueryBuilder\QueryBuilder;
 class UserService
 {
     public function __construct(
-        private readonly \App\Metrics\Calculators\CriticalityCalculator $criticalityCalculator,
+        private readonly CriticalityCalculator $criticalityCalculator,
         private readonly MetricSnapshotService $snapshotService,
     ) {}
 
@@ -99,6 +102,62 @@ class UserService
             ])
             ->paginate($request->integer('per_page', 20))
             ->appends($request->query());
+    }
+
+    /**
+     * <summary>
+     *  Build a paginated, filterable, sortable query for the users assigned to a project via Spatie QueryBuilder.
+     *  Scoped to the project's team pivot. Supports search (name/email), department, skill and status filters.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
+     * @param Project $project Target project whose team is listed
+     * @return LengthAwarePaginator Paginated project users with department and skills.category
+     */
+    public function getAgileUsersForProject(QueryParams $params, Project $project): LengthAwarePaginator
+    {
+        return QueryBuilder::for($project->users()->with(['department', 'skills.category']), $params->toRequest())
+            ->allowedFilters([
+                AllowedFilter::callback('search', function ($query, $value) {
+                    $query->where(fn($q) => $q
+                        ->where('firstname', 'like', "%{$value}%")
+                        ->orWhere('lastname', 'like', "%{$value}%")
+                        ->orWhere('email', 'like', "%{$value}%")
+                    );
+                }),
+                AllowedFilter::exact('department_id'),
+                AllowedFilter::callback('skill_id', function ($query, $value) {
+                    $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
+                }),
+                AllowedFilter::callback('status', function ($query, $value) {
+                    $status = UserStatus::tryFrom($value);
+                    if ($status === null) return;
+
+                    $today = now()->toDateString();
+                    $hasAbsence = fn($q) => $q
+                        ->where('start_date', '<=', $today)
+                        ->where('end_date', '>=', $today);
+
+                    if ($status === UserStatus::Away) {
+                        $query->whereHas('absences', $hasAbsence);
+                    } else {
+                        $query->whereDoesntHave('absences', $hasAbsence);
+                    }
+                }),
+            ])
+            ->allowedSorts([
+                AllowedSort::callback('name', function ($query, bool $descending) {
+                    $dir = $descending ? 'desc' : 'asc';
+                    $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
+                }),
+                AllowedSort::field('firstname'),
+                AllowedSort::field('lastname'),
+                AllowedSort::field('title'),
+                AllowedSort::field('created_at', 'users.created_at'),
+            ])
+            ->defaultSort('firstname')
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
     }
 
     /**

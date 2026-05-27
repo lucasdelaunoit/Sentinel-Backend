@@ -50,8 +50,6 @@ class ProjectManager
      */
     public function recalculateProjectMetrics(Project $project): void
     {
-        // Each Calculator owns its own MetricsManager-backed transaction (col update + snapshot).
-        // Order: leaf metrics first so FragilityCalculator can read cached cols if it wants to.
         $this->busFactorCalculator->forProject($project);
         $this->teamAvailabilityCalculator->forProject($project);
         $this->knowledgeCoverageCalculator->forProject($project);

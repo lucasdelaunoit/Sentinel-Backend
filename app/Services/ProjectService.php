@@ -10,6 +10,7 @@ use App\Metrics\Severity;
 use App\Metrics\Snapshots\MetricKey;
 use App\Metrics\Snapshots\MetricScope;
 use App\Metrics\Snapshots\MetricSnapshotService;
+use App\Enums\ProjectStatus;
 use App\Metrics\Stat;
 use App\Models\Project;
 use App\Support\QueryParams;
@@ -244,13 +245,21 @@ class ProjectService
             ->withCount('users')
             ->allowedFilters([
                 AllowedFilter::callback('search', fn($q, $v) => $q->where('name', 'like', "%{$v}%")),
-                AllowedFilter::exact('status'),
+                AllowedFilter::callback('status', function ($q, $v) {
+                    $status = ProjectStatus::tryFrom((string) $v);
+                    if ($status !== null) $q->whereStatus($status);
+                }),
             ])
             ->allowedSorts([
                 AllowedSort::field('name'),
-                AllowedSort::field('status'),
-                AllowedSort::field('progress'),
+                AllowedSort::callback('status', fn($q, bool $descending) => $q->orderByStatus($descending)),
+                AllowedSort::callback('progress', fn($q, bool $descending) => $q->orderByProgress($descending)),
                 AllowedSort::field('fragility_raw'),
+                AllowedSort::field('risk_score', 'fragility_raw'),
+                AllowedSort::field('team_availability', 'team_availability_raw'),
+                AllowedSort::field('knowledge_coverage', 'knowledge_coverage_raw'),
+                AllowedSort::field('absence_impact', 'absence_impact_raw'),
+                AllowedSort::field('bus_factor'),
                 AllowedSort::field('created_at'),
             ])
             ->defaultSort('-created_at')
