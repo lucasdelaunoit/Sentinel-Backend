@@ -179,6 +179,40 @@ class ProjectController extends Controller
 
     /**
      * <summary>
+     *  Retrieve the knowledge-coverage breakdown for a project's skill requirements.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return JsonResponse Knowledge-coverage rows wrapped in { data: [...] }
+     */
+    public function getProjectKnowledgeCoverage(Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $rows = $this->projectManager->getProjectKnowledgeCoverage($project);
+
+        // Return (Controller)
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the competency-radar series (per SkillCategory) for a project.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return JsonResponse Radar rows wrapped in { data: [...] }
+     */
+    public function getProjectCompetencyRadar(Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $rows = $this->projectManager->getProjectCompetencyRadar($project);
+
+        // Return (Controller)
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * <summary>
      *  Attach a user to a project.
      * </summary>
      *

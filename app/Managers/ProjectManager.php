@@ -399,4 +399,31 @@ class ProjectManager
     {
         return DB::transaction(fn() => $this->projectService->unarchiveProject($project));
     }
+
+    /**
+     * <summary>
+     *  Per-project knowledge-coverage breakdown — skill requirement rows with holders,
+     *  active_holders_count, status (uncovered/silo/covered), max_level, team_size.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Knowledge-coverage rows keyed numerically
+     */
+    public function getProjectKnowledgeCoverage(Project $project): array
+    {
+        return $this->projectService->getProjectKnowledgeCoverage($project);
+    }
+
+    /**
+     * <summary>
+     *  Per-project competency radar — one row per SkillCategory with value (0–100) and target.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Radar rows keyed numerically
+     */
+    public function getProjectCompetencyRadar(Project $project): array
+    {
+        return $this->projectService->getProjectCompetencyRadar($project);
+    }
 }

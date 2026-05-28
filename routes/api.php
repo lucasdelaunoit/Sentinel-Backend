@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- PROJECT-RELATED ENDPOINTS ----------------- */
     Route::get('/projects/{project}/stats', [ProjectController::class, 'getProjectStats']);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
+    Route::get('/projects/{project}/knowledge-coverage', [ProjectController::class, 'getProjectKnowledgeCoverage']);
+    Route::get('/projects/{project}/competency-radar', [ProjectController::class, 'getProjectCompetencyRadar']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
     Route::get('/projects/{project}/users', [UserController::class, 'getAgileUsersForProject']);
     Route::post('/projects/{project}/users', [ProjectController::class, 'attachUserToProject']);

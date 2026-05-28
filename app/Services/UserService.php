@@ -88,6 +88,9 @@ class UserService
                         $query->whereDoesntHave('absences', $hasAbsence);
                     }
                 }),
+                AllowedFilter::callback('not_in_project', function ($query, $value) {
+                    $query->whereDoesntHave('projects', fn($q) => $q->where('projects.id', (int) $value));
+                }),
             ])
             ->allowedSorts([
                 AllowedSort::callback('name', function ($query, bool $descending) {

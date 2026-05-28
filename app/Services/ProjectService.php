@@ -11,9 +11,12 @@ use App\Metrics\Snapshots\MetricKey;
 use App\Metrics\Snapshots\MetricScope;
 use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Enums\ProjectStatus;
+use App\Enums\UserStatus;
 use App\Metrics\Stat;
 use App\Models\Project;
+use App\Models\SkillCategory;
 use App\Support\QueryParams;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
@@ -535,5 +538,145 @@ class ProjectService
         $project->update(['archived_at' => null]);
 
         return $project->fresh();
+    }
+
+    /**
+     * <summary>
+     *  Knowledge-coverage breakdown for a project. Per project skill requirement, lists
+     *  team members who hold that skill at level >= required_level. active_holders excludes
+     *  members whose Absence range covers today. status = uncovered (0 active), silo (1),
+     *  covered (>=2). max_level = max level across all holders regardless of level. Read-only.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array<int, array{
+     *     skill: array{id:int, name:string, category:?string},
+     *     required_level: int,
+     *     max_level: int,
+     *     active_holders_count: int,
+     *     team_size: int,
+     *     status: string,
+     *     holders: array<int, array{id:int, firstname:?string, lastname:?string, status:string, level:int, on_leave_today:bool}>
+     * }>
+     */
+    public function getProjectKnowledgeCoverage(Project $project): array
+    {
+        $project->loadMissing([
+            'skillRequirements.category',
+            'users.skills',
+            'users.absences',
+        ]);
+
+        $today = Carbon::today();
+        $teamSize = $project->users->count();
+        $rows = [];
+
+        foreach ($project->skillRequirements as $skill) {
+            $required = (int) ($skill->pivot->required_level ?? 1);
+            $holders = [];
+            $maxLevel = 0;
+            $activeCount = 0;
+
+            foreach ($project->users as $user) {
+                $userSkill = $user->skills->firstWhere('id', $skill->id);
+                if ($userSkill === null) {
+                    continue;
+                }
+
+                $level = (int) $userSkill->pivot->level;
+                $maxLevel = max($maxLevel, $level);
+
+                $onLeave = $user->absences->contains(function ($a) use ($today) {
+                    return Carbon::parse($a->start_date)->lte($today)
+                        && Carbon::parse($a->end_date)->gte($today);
+                });
+
+                if (!$onLeave && $level >= $required) {
+                    $activeCount++;
+                }
+
+                $holders[] = [
+                    'id' => $user->id,
+                    'firstname' => $user->firstname,
+                    'lastname' => $user->lastname,
+                    'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
+                    'level' => $level,
+                    'on_leave_today' => $onLeave,
+                ];
+            }
+
+            $status = match (true) {
+                $activeCount === 0 => 'uncovered',
+                $activeCount === 1 => 'silo',
+                default => 'covered',
+            };
+
+            $rows[] = [
+                'skill' => [
+                    'id' => $skill->id,
+                    'name' => $skill->name,
+                    'category' => $skill->category?->name,
+                ],
+                'required_level' => $required,
+                'max_level' => $maxLevel,
+                'active_holders_count' => $activeCount,
+                'team_size' => $teamSize,
+                'status' => $status,
+                'holders' => $holders,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * <summary>
+     *  Competency radar for a project. One axis per SkillCategory in the DB (stable order by name).
+     *  value = round(avg(level) / 5 * 100) over all EmployeeSkill rows of the team where the skill
+     *  belongs to the category. Categories with no held skill in the team return 0. target is fixed
+     *  at 80 for now (no setting wired yet). Read-only.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array<int, array{category:string, value:int, target:int}>
+     */
+    public function getProjectCompetencyRadar(Project $project): array
+    {
+        $project->loadMissing(['users.skills.category']);
+
+        $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
+
+        $sums = [];
+        $counts = [];
+        foreach ($categories as $category) {
+            $sums[$category->id] = 0;
+            $counts[$category->id] = 0;
+        }
+
+        foreach ($project->users as $user) {
+            foreach ($user->skills as $skill) {
+                $categoryId = $skill->skill_category_id;
+                if (!isset($sums[$categoryId])) {
+                    continue;
+                }
+                $sums[$categoryId] += (int) $skill->pivot->level;
+                $counts[$categoryId]++;
+            }
+        }
+
+        $target = 80;
+        $result = [];
+        foreach ($categories as $category) {
+            $count = $counts[$category->id];
+            $value = $count === 0 ? 0 : (int) round(($sums[$category->id] / $count) / 5 * 100);
+
+            $result[] = [
+                'category' => $category->name,
+                'value' => $value,
+                'target' => $target,
+            ];
+        }
+
+        return $result;
     }
 }

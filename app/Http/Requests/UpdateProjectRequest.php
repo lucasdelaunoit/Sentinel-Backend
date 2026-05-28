@@ -9,10 +9,10 @@ class UpdateProjectRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'        => ['sometimes', 'string', 'max:255'],
+            'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'started_at'  => ['nullable', 'date'],
-            'deadline'    => ['nullable', 'date', 'after_or_equal:started_at'],
+            'started_at' => ['nullable', 'date'],
+            'deadline' => ['nullable', 'date', 'after_or_equal:started_at'],
         ];
     }
 }
