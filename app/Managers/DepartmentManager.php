@@ -3,29 +3,66 @@
 namespace App\Managers;
 
 use App\Models\Department;
-use Illuminate\Database\Eloquent\Collection;
+use App\Services\DepartmentService;
+use App\Support\QueryParams;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class DepartmentManager
 {
-    public function list(): Collection
+    public function __construct(
+        private readonly DepartmentService $departmentService,
+    ) {}
+
+    /**
+     * <summary>
+     *  Retrieve all departments (paginated, filterable, sortable, searchable).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
+     * @return LengthAwarePaginator Paginated list of departments
+     */
+    public function getAgileDepartments(QueryParams $params): LengthAwarePaginator
     {
-        return Department::withCount('employees')->orderBy('name')->get();
+        return $this->departmentService->getAgileDepartments($params);
     }
 
-    public function create(array $data): Department
+    /**
+     * <summary>
+     *  Create a new Department.
+     * </summary>
+     *
+     * @param array<string, mixed> $data Validated payload (name)
+     * @return Department Newly created department
+     */
+    public function createDepartment(array $data): Department
     {
-        return Department::create($data);
+        return $this->departmentService->createDepartment($data);
     }
 
-    public function update(Department $department, array $data): Department
+    /**
+     * <summary>
+     *  Update a Department.
+     * </summary>
+     *
+     * @param Department $department Target department
+     * @param array<string, mixed> $data Validated fields (name?)
+     * @return Department Refreshed department with users_count
+     */
+    public function updateDepartment(Department $department, array $data): Department
     {
-        $department->update($data);
-
-        return $department->fresh();
+        return $this->departmentService->updateDepartment($department, $data);
     }
 
-    public function delete(Department $department): void
+    /**
+     * <summary>
+     *  Delete a Department.
+     * </summary>
+     *
+     * @param Department $department Target department
+     * @return void
+     */
+    public function deleteDepartment(Department $department): void
     {
-        $department->delete();
+        $this->departmentService->deleteDepartment($department);
     }
 }

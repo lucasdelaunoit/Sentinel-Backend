@@ -49,6 +49,19 @@ class UserManager
 
     /**
      * <summary>
+     *  Retrieve a single user with department eager-loaded.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return User User with department loaded
+     */
+    public function getUser(User $user): User
+    {
+        return $this->userService->getUser($user);
+    }
+
+    /**
+     * <summary>
      *  Retrieve the paginated, filterable, sortable list of users assigned to a project via Spatie QueryBuilder.
      * </summary>
      *

@@ -98,9 +98,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Simulations
     Route::apiResource('simulations', SimulationController::class)->except(['update']);
 
-    // Departments
-    Route::apiResource('departments', DepartmentController::class)->except(['show']);
-
     /* ----------------- DERIVED METRICS (not settings) ----------------- */
     Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
 
@@ -129,6 +126,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/rules', [RuleController::class, 'createRule']);
         Route::patch('/rules/{rule}', [RuleController::class, 'updateRule']);
         Route::delete('/rules/{rule}', [RuleController::class, 'deleteRule']);
+
+        /* ----------------- DEPARTMENTS ----------------- */
+        Route::get('/departments', [DepartmentController::class, 'getAgileDepartments']);
+        Route::post('/departments', [DepartmentController::class, 'createDepartment']);
+        Route::patch('/departments/{department}', [DepartmentController::class, 'updateDepartment']);
+        Route::delete('/departments/{department}', [DepartmentController::class, 'deleteDepartment']);
 
         /* ----------------- SKILL CATEGORIES ----------------- */
         Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);

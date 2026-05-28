@@ -2,42 +2,88 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreDepartmentRequest;
+use App\Http\Requests\UpdateDepartmentRequest;
+use App\Http\Resources\DepartmentResource;
 use App\Managers\DepartmentManager;
 use App\Models\Department;
+use App\Support\QueryParams;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DepartmentController extends Controller
 {
-    public function __construct(private readonly DepartmentManager $manager) {}
+    public function __construct(
+        private readonly DepartmentManager $departmentManager,
+    ) {}
 
-    public function index(): JsonResponse
+    /**
+     * <summary>
+     *  Retrieve all departments (paginated, filterable, sortable, searchable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter (search), sort parameters
+     * @return AnonymousResourceCollection Paginated list of departments
+     */
+    public function getAgileDepartments(Request $request): AnonymousResourceCollection
     {
-        return response()->json($this->manager->list());
+        // Act (Manager)
+        $departments = $this->departmentManager->getAgileDepartments(QueryParams::fromRequest($request));
+
+        // Return (Controller)
+        return DepartmentResource::collection($departments);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * <summary>
+     *  Create a new department.
+     * </summary>
+     *
+     * @param StoreDepartmentRequest $request name
+     * @return JsonResponse Created department — HTTP 201
+     */
+    public function createDepartment(StoreDepartmentRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
-        ]);
+        // Act (Manager)
+        $department = $this->departmentManager->createDepartment($request->validated());
 
-        return response()->json($this->manager->create($data), 201);
+        // Return (Controller)
+        return DepartmentResource::make($department)->response()->setStatusCode(201);
     }
 
-    public function update(Request $request, Department $department): JsonResponse
+    /**
+     * <summary>
+     *  Update an existing department.
+     * </summary>
+     *
+     * @param UpdateDepartmentRequest $request Fields to update (all optional)
+     * @param Department $department Route-model bound department
+     * @return DepartmentResource Updated department with users_count
+     */
+    public function updateDepartment(UpdateDepartmentRequest $request, Department $department): DepartmentResource
     {
-        $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255', "unique:departments,name,{$department->id}"],
-        ]);
+        // Act (Manager)
+        $department = $this->departmentManager->updateDepartment($department, $request->validated());
 
-        return response()->json($this->manager->update($department, $data));
+        // Return (Controller)
+        return DepartmentResource::make($department);
     }
 
-    public function destroy(Department $department): JsonResponse
+    /**
+     * <summary>
+     *  Delete a department.
+     * </summary>
+     *
+     * @param Department $department Route-model bound department
+     * @return JsonResponse HTTP 204 No Content
+     */
+    public function deleteDepartment(Department $department): JsonResponse
     {
-        $this->manager->delete($department);
+        // Act (Manager)
+        $this->departmentManager->deleteDepartment($department);
 
+        // Return (Controller)
         return response()->json(null, 204);
     }
 }

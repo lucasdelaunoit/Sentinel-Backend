@@ -177,6 +177,19 @@ class UserService
 
     /**
      * <summary>
+     *  Eager-load the department relation on a User instance.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return User Same instance with department loaded
+     */
+    public function getUser(User $user): User
+    {
+        return $user->load('department');
+    }
+
+    /**
+     * <summary>
      *  Apply field updates to an existing user and reload the department relation.
      * </summary>
      *

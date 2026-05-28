@@ -61,13 +61,15 @@ class UserController extends Controller
      * </summary>
      *
      * @param StoreUserRequest $request name, email, title, department_id
-     * @return UserResource Created user — HTTP 201
+     * @return JsonResponse Created user — HTTP 201
      */
-    public function createUser(StoreUserRequest $request): UserResource
+    public function createUser(StoreUserRequest $request): JsonResponse
     {
-        return UserResource::make($this->userManager->createUser($request->validated()))
-            ->response()
-            ->setStatusCode(201);
+        // Act (Manager)
+        $user = $this->userManager->createUser($request->validated());
+
+        // Return (Controller)
+        return UserResource::make($user)->response()->setStatusCode(201);
     }
 
     /**
@@ -80,6 +82,10 @@ class UserController extends Controller
      */
     public function getUser(User $user): UserResource
     {
+        // Act (Manager)
+        $user = $this->userManager->getUser($user);
+
+        // Return (Controller)
         return new UserResource($user);
     }
 
