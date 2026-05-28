@@ -76,6 +76,24 @@ class ProjectController extends Controller
 
     /**
      * <summary>
+     *  Retrieve all projects assigned to a user (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param Request $request Pagination, filter, sort & search parameters
+     * @param User $user Route-model bound user
+     * @return AnonymousResourceCollection Paginated list of projects for the user
+     */
+    public function getAgileProjectsForUser(Request $request, User $user): AnonymousResourceCollection
+    {
+        // Act (Manager)
+        $projects = $this->projectManager->getAgileProjectsForUser(QueryParams::fromRequest($request), $user);
+
+        // Return (Controller)
+        return ProjectResource::collection($projects);
+    }
+
+    /**
+     * <summary>
      *  Create a new project.
      * </summary>
      *

@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
     Route::get('/users/{user}/stats', [UserController::class, 'getUserStats']);
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
+    Route::get('/users/{user}/projects', [ProjectController::class, 'getAgileProjectsForUser']);
     Route::get('/users/{user}/skills', [SkillController::class, 'getAgileSkillsForUser']);
     Route::post('/users/{user}/skills', [UserController::class, 'attachSkillToUser']);
     Route::patch('/users/{user}/skills/{skill}', [UserController::class, 'updateUserSkill']);

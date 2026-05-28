@@ -15,6 +15,7 @@ use App\Enums\UserStatus;
 use App\Metrics\Stat;
 use App\Models\Project;
 use App\Models\SkillCategory;
+use App\Models\User;
 use App\Support\QueryParams;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -274,6 +275,9 @@ class ProjectService
                     $status = ProjectStatus::tryFrom((string) $v);
                     if ($status !== null) $q->whereStatus($status);
                 }),
+                AllowedFilter::callback('not_in_user', function ($query, $value) {
+                    $query->whereDoesntHave('users', fn($q) => $q->where('users.id', (int) $value));
+                }),
             ])
             ->allowedSorts([
                 AllowedSort::field('name'),
@@ -286,6 +290,44 @@ class ProjectService
                 AllowedSort::field('absence_impact', 'absence_impact_raw'),
                 AllowedSort::field('bus_factor'),
                 AllowedSort::field('created_at'),
+            ])
+            ->defaultSort('-created_at')
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
+    }
+
+    /**
+     * <summary>
+     *  Build a paginated, filterable, sortable query for projects assigned to a user via Spatie QueryBuilder.
+     *  Scoped to the user's projects pivot. Supports search (name), status filter and standard project sorts.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
+     * @param User $user Target user whose projects are listed
+     * @return LengthAwarePaginator Paginated user projects with user count
+     */
+    public function getAgileProjectsForUser(QueryParams $params, User $user): LengthAwarePaginator
+    {
+        return QueryBuilder::for($user->projects(), $params->toRequest())
+            ->withCount('users')
+            ->allowedFilters([
+                AllowedFilter::callback('search', fn($q, $v) => $q->where('name', 'like', "%{$v}%")),
+                AllowedFilter::callback('status', function ($q, $v) {
+                    $status = ProjectStatus::tryFrom((string) $v);
+                    if ($status !== null) $q->whereStatus($status);
+                }),
+            ])
+            ->allowedSorts([
+                AllowedSort::field('name'),
+                AllowedSort::callback('status', fn($q, bool $descending) => $q->orderByStatus($descending)),
+                AllowedSort::callback('progress', fn($q, bool $descending) => $q->orderByProgress($descending)),
+                AllowedSort::field('fragility_raw'),
+                AllowedSort::field('risk_score', 'fragility_raw'),
+                AllowedSort::field('team_availability', 'team_availability_raw'),
+                AllowedSort::field('knowledge_coverage', 'knowledge_coverage_raw'),
+                AllowedSort::field('absence_impact', 'absence_impact_raw'),
+                AllowedSort::field('bus_factor'),
+                AllowedSort::field('created_at', 'projects.created_at'),
             ])
             ->defaultSort('-created_at')
             ->paginate($params->perPage())

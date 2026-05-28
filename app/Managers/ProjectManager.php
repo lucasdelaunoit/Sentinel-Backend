@@ -15,6 +15,7 @@ use App\Metrics\Calculators\ProjectsTotalCalculator;
 use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\Scales\FragilityScale;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\ProjectService;
 use App\Services\SkillCoverageService;
 use App\Support\QueryParams;
@@ -122,6 +123,20 @@ class ProjectManager
     public function getAgileProjects(QueryParams $params): LengthAwarePaginator
     {
         return $this->projectService->getAgileProjects($params);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve projects assigned to a user (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
+     * @param User $user Target user whose projects are listed
+     * @return LengthAwarePaginator Paginated list of user projects
+     */
+    public function getAgileProjectsForUser(QueryParams $params, User $user): LengthAwarePaginator
+    {
+        return $this->projectService->getAgileProjectsForUser($params, $user);
     }
 
     /**
