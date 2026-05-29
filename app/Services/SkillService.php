@@ -29,6 +29,9 @@ class SkillService
             ->allowedFilters([
                 AllowedFilter::callback('search', fn($q, $v) => $q->where('name', 'like', "%{$v}%")),
                 AllowedFilter::exact('category_id', 'skill_category_id'),
+                AllowedFilter::callback('not_in_user', function ($query, $value) {
+                    $query->whereDoesntHave('users', fn($q) => $q->where('users.id', $value));
+                }),
             ])
             ->allowedSorts(['name'])
             ->defaultSort('name')

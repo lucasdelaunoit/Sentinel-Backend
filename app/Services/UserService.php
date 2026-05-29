@@ -12,6 +12,7 @@ use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
 use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Models\Project;
+use App\Models\SkillCategory;
 use App\Models\User;
 use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
@@ -480,4 +481,51 @@ class UserService
         );
     }
 
+    /**
+     * <summary>
+     *  Competency radar for a user. One axis per SkillCategory in the DB (stable order by name).
+     *  value = round(avg(level) / 5 * 100) over the user's EmployeeSkill rows belonging to the category.
+     *  Categories the user has no skill in return 0. target is fixed at 80 for now. Read-only.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return array<int, array{category:string, value:int, target:int}>
+     */
+    public function getUserCompetencyRadar(User $user): array
+    {
+        $user->loadMissing('skills.category');
+
+        $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
+
+        $sums = [];
+        $counts = [];
+        foreach ($categories as $category) {
+            $sums[$category->id] = 0;
+            $counts[$category->id] = 0;
+        }
+
+        foreach ($user->skills as $skill) {
+            $categoryId = $skill->skill_category_id;
+            if (!isset($sums[$categoryId])) {
+                continue;
+            }
+            $sums[$categoryId] += (int) $skill->pivot->level;
+            $counts[$categoryId]++;
+        }
+
+        $target = 80;
+        $result = [];
+        foreach ($categories as $category) {
+            $count = $counts[$category->id];
+            $value = $count === 0 ? 0 : (int) round(($sums[$category->id] / $count) / 5 * 100);
+
+            $result[] = [
+                'category' => $category->name,
+                'value' => $value,
+                'target' => $target,
+            ];
+        }
+
+        return $result;
+    }
 }

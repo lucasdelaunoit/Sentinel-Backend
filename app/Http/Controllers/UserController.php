@@ -183,6 +183,23 @@ class UserController extends Controller
 
     /**
      * <summary>
+     *  Retrieve the competency-radar series (per SkillCategory) for a user.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse Radar rows wrapped in { data: [...] }
+     */
+    public function getUserCompetencyRadar(User $user): JsonResponse
+    {
+        // Act (Manager)
+        $rows = $this->userManager->getUserCompetencyRadar($user);
+
+        // Return (Controller)
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * <summary>
      *  Get the org's present-capacity percentage for today (share of users with no active absence).
      * </summary>
      *

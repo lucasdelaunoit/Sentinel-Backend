@@ -185,6 +185,19 @@ class UserManager
 
     /**
      * <summary>
+     *  Competency radar (per SkillCategory) for one user.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return array<int, array{category:string, value:int, target:int}>
+     */
+    public function getUserCompetencyRadar(User $user): array
+    {
+        return $this->userService->getUserCompetencyRadar($user);
+    }
+
+    /**
+     * <summary>
      *  Compute the org's present-capacity percentage for today: share of users with no active absence.
      *  Orchestrates two UserService counts (total + absent), then derives the percentage.
      * </summary>
