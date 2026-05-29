@@ -126,7 +126,7 @@ class DashboardManager
                 'firstname' => $user->firstname,
                 'lastname' => $user->lastname,
             ],
-            'kind' => $absence->type === 'sick' ? 'sick_leave' : 'leave',
+            'kind' => 'leave',
             'severity' => $this->resolveEventSeverity($affected->all()),
             'org_impact' => $this->buildOrgImpact($affected->all(), $baseline),
             'affected_projects' => $affected

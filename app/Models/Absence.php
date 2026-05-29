@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AbsenceType;
 use Database\Factories\AbsenceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,8 @@ class Absence extends Model
 
     protected $casts = [
         'start_date' => 'date',
-        'end_date'   => 'date',
+        'end_date' => 'date',
+        'type' => AbsenceType::class,
     ];
 
     public function user(): BelongsTo

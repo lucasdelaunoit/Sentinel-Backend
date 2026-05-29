@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AbsenceType;
 use App\Models\Absence;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreAbsenceRequest extends FormRequest
@@ -15,7 +17,7 @@ class StoreAbsenceRequest extends FormRequest
         return [
             'start_date' => ['required', 'date'],
             'end_date'   => ['required', 'date', 'after_or_equal:start_date'],
-            'type'       => ['nullable', 'in:vacation,sick,personal,other'],
+            'type' => ['nullable', Rule::enum(AbsenceType::class)],
             'reason'     => ['nullable', 'string'],
         ];
     }

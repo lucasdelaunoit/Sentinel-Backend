@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->date('start_date');
             $table->date('end_date');
-            $table->string('type')->default('vacation'); // vacation, sick, personal, other
+            $table->string('type')->default('vacation'); // App\Enums\AbsenceType
             $table->text('reason')->nullable();
             $table->timestamps();
             $table->softDeletes();

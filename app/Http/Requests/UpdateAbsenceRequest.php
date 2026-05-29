@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\AbsenceType;
 use App\Models\Absence;
 use Carbon\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateAbsenceRequest extends FormRequest
@@ -14,7 +16,7 @@ class UpdateAbsenceRequest extends FormRequest
         return [
             'start_date' => ['sometimes', 'date'],
             'end_date'   => ['sometimes', 'date', 'after_or_equal:start_date'],
-            'type'       => ['sometimes', 'in:vacation,sick,personal,other'],
+            'type' => ['sometimes', Rule::enum(AbsenceType::class)],
             'reason'     => ['nullable', 'string'],
         ];
     }
