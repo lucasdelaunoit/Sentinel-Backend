@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreAbsenceRequest;
 use App\Http\Requests\UpdateAbsenceRequest;
 use App\Http\Resources\AbsenceResource;
+use App\Http\Resources\UserAbsenceStatsResource;
 use App\Managers\AbsenceManager;
 use App\Models\Absence;
 use App\Models\User;
@@ -88,5 +89,22 @@ class AbsenceController extends Controller
 
         // Return (Controller)
         return response()->json(null, 204);
+    }
+
+    /**
+     * <summary>
+     *  Get absence stats for a specific user: total absences, days off this year, upcoming.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return UserAbsenceStatsResource total_absences, days_off, upcoming
+     */
+    public function getUserAbsenceStats(User $user): UserAbsenceStatsResource
+    {
+        // Act (Manager)
+        $stats = $this->absenceManager->getUserAbsenceStats($user);
+
+        // Return (Controller)
+        return new UserAbsenceStatsResource($stats);
     }
 }

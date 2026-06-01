@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Metrics\Severity;
+use App\Metrics\Stat;
 use App\Models\Absence;
 use App\Models\User;
 use App\Support\QueryParams;
@@ -109,5 +111,88 @@ class AbsenceService
     public function deleteAbsence(Absence $absence): void
     {
         $absence->delete();
+    }
+
+    /**
+     * <summary>
+     *  Build the all-time total-absences Stat for a user — live count via absences relation.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserTotalAbsencesStat(User $user): Stat
+    {
+        $count = $user->absences()->count();
+
+        return new Stat(
+            value: (string) $count,
+            valueRaw: $count,
+            severity: Severity::OK,
+            insight: 'all-time',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the days-off-this-year Stat for a user. Sums inclusive day counts of every absence
+     *  clamped to [Jan 1, Dec 31] of the current year. Single-day absence counts as 1 day.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserDaysOffThisYearStat(User $user): Stat
+    {
+        $yearStart = Carbon::now()->startOfYear()->toDateString();
+        $yearEnd = Carbon::now()->endOfYear()->toDateString();
+
+        $absences = $user->absences()
+            ->whereDate('start_date', '<=', $yearEnd)
+            ->whereDate('end_date', '>=', $yearStart)
+            ->get(['start_date', 'end_date']);
+
+        $days = 0;
+        foreach ($absences as $absence) {
+            $start = Carbon::parse($absence->start_date)->max(Carbon::parse($yearStart));
+            $end = Carbon::parse($absence->end_date)->min(Carbon::parse($yearEnd));
+            $days += $start->diffInDays($end) + 1;
+        }
+
+        return new Stat(
+            value: (string) $days,
+            valueRaw: $days,
+            severity: Severity::OK,
+            insight: 'year-to-date',
+        );
+    }
+
+    /**
+     * <summary>
+     *  Build the upcoming-absences Stat for a user. Counts absences whose start_date is after today.
+     *  Insight is the next start date formatted as "next: 01 Jun 2026", or "None" when empty.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return Stat
+     */
+    public function getUserUpcomingAbsencesStat(User $user): Stat
+    {
+        $today = Carbon::today()->toDateString();
+
+        $upcoming = $user->absences()
+            ->whereDate('start_date', '>', $today)
+            ->orderBy('start_date')
+            ->get(['start_date']);
+
+        $count = $upcoming->count();
+        $next = $count > 0 ? Carbon::parse($upcoming->first()->start_date)->format('d M Y') : null;
+
+        return new Stat(
+            value: (string) $count,
+            valueRaw: $count,
+            severity: $count > 0 ? Severity::WARNING : Severity::OK,
+            insight: $next !== null ? "next: {$next}" : 'None',
+        );
     }
 }

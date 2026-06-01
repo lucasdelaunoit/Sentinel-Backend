@@ -94,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/absences/{absence}', [AbsenceController::class, 'deleteAbsence']);
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
+    Route::get('/users/{user}/absences/stats', [AbsenceController::class, 'getUserAbsenceStats']);
     Route::get('/users/{user}/absences', [AbsenceController::class, 'getAgileAbsencesForUser']);
     Route::post('/users/{user}/absences', [AbsenceController::class, 'createAbsenceForUser']);
 

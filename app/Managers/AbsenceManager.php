@@ -2,6 +2,7 @@
 
 namespace App\Managers;
 
+use App\DTO\Stats\UserAbsenceStats;
 use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Absence;
 use App\Models\User;
@@ -74,6 +75,24 @@ class AbsenceManager
         $user = $absence->user;
         $this->absenceService->deleteAbsence($absence);
         if ($user) $this->dispatchProjectRecalculations($user);
+    }
+
+    /**
+     * <summary>
+     *  Assemble the typed UserAbsenceStats DTO for GET /users/{user}/absences/stats.
+     *  Orchestrates AbsenceService — one Service call per metric.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return UserAbsenceStats total_absences, days_off, upcoming
+     */
+    public function getUserAbsenceStats(User $user): UserAbsenceStats
+    {
+        return new UserAbsenceStats(
+            totalAbsences: $this->absenceService->getUserTotalAbsencesStat($user),
+            daysOff: $this->absenceService->getUserDaysOffThisYearStat($user),
+            upcoming: $this->absenceService->getUserUpcomingAbsencesStat($user),
+        );
     }
 
     private function dispatchProjectRecalculations(?User $user): void
