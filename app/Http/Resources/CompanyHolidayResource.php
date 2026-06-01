@@ -12,10 +12,11 @@ class CompanyHolidayResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'        => $this->id,
-            'name'      => $this->name,
-            'date'      => $this->date?->toDateString(),
-            'recurring' => $this->recurring,
+            'id'         => $this->id,
+            'name'       => $this->name,
+            'start_date' => $this->start_date?->toDateString(),
+            'end_date'   => $this->end_date?->toDateString(),
+            'recurring'  => $this->recurring,
         ];
     }
 }

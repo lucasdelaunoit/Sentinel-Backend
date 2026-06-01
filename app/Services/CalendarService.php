@@ -83,10 +83,18 @@ class CalendarService
     {
         $set = [];
         foreach ($holidays as $holiday) {
-            $date = $holiday->recurring
-                ? $holiday->date->setYear($year)
-                : $holiday->date;
-            $set[$date->toDateString()] = true;
+            $start = CarbonImmutable::parse($holiday->start_date);
+            $end   = CarbonImmutable::parse($holiday->end_date);
+            if ($holiday->recurring) {
+                $start = $start->setYear($year);
+                $end   = $end->setYear($year);
+                if ($end->lt($start)) {
+                    $end = $end->addYear();
+                }
+            }
+            foreach (CarbonPeriod::create($start, $end) as $day) {
+                $set[$day->toDateString()] = true;
+            }
         }
         return $set;
     }

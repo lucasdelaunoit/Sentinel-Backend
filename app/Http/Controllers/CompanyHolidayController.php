@@ -7,7 +7,9 @@ use App\Http\Requests\UpdateCompanyHolidayRequest;
 use App\Http\Resources\CompanyHolidayResource;
 use App\Managers\CompanyHolidayManager;
 use App\Models\CompanyHoliday;
+use App\Support\QueryParams;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CompanyHolidayController extends Controller
@@ -18,15 +20,16 @@ class CompanyHolidayController extends Controller
 
     /**
      * <summary>
-     *  Return all CompanyHoliday rows ordered by date.
+     *  Return paginated CompanyHoliday rows ordered by date.
      * </summary>
      *
+     * @param Request $request Incoming HTTP request
      * @return AnonymousResourceCollection
      */
-    public function getAgileCompanyHolidays(): AnonymousResourceCollection
+    public function getAgileCompanyHolidays(Request $request): AnonymousResourceCollection
     {
         // Act (Manager)
-        $holidays = $this->companyHolidayManager->getAgileCompanyHolidays();
+        $holidays = $this->companyHolidayManager->getAgileCompanyHolidays(QueryParams::fromRequest($request));
 
         // Return (Controller)
         return CompanyHolidayResource::collection($holidays);

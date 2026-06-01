@@ -8,12 +8,14 @@ class CompanyHoliday extends Model
 {
     protected $fillable = [
         'name',
-        'date',
+        'start_date',
+        'end_date',
         'recurring',
     ];
 
     protected $casts = [
-        'date'      => 'date',
-        'recurring' => 'boolean',
+        'start_date' => 'date',
+        'end_date'   => 'date',
+        'recurring'  => 'boolean',
     ];
 }

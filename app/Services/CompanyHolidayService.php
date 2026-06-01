@@ -3,20 +3,33 @@
 namespace App\Services;
 
 use App\Models\CompanyHoliday;
+use App\Support\QueryParams;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Spatie\QueryBuilder\AllowedFilter;
+use Spatie\QueryBuilder\QueryBuilder;
 
 class CompanyHolidayService
 {
     /**
      * <summary>
-     *  Return all CompanyHoliday rows ordered by date ascending.
+     *  Return paginated CompanyHoliday rows ordered by date ascending.
      * </summary>
      *
-     * @return Collection<int, CompanyHoliday>
+     * @param QueryParams $params Normalized query params
+     * @return LengthAwarePaginator
      */
-    public function getAgileCompanyHolidays(): Collection
+    public function getAgileCompanyHolidays(QueryParams $params): LengthAwarePaginator
     {
-        return CompanyHoliday::orderBy('date')->get();
+        return QueryBuilder::for(CompanyHoliday::class, $params->toRequest())
+            ->allowedFilters([
+                AllowedFilter::callback('search', fn($q, $v) => $q->where('name', 'like', "%{$v}%")),
+                AllowedFilter::exact('recurring'),
+            ])
+            ->allowedSorts(['name', 'start_date', 'end_date'])
+            ->defaultSort('start_date')
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
     }
 
     /**
@@ -30,14 +43,29 @@ class CompanyHolidayService
      */
     public function getCompanyHolidaysForMonth(int $year, int $month): Collection
     {
+        $monthStart = sprintf('%04d-%02d-01', $year, $month);
+        $monthEnd   = date('Y-m-t', strtotime($monthStart));
+
         return CompanyHoliday::query()
-            ->where(function ($q) use ($year, $month) {
-                $q->whereYear('date', $year)->whereMonth('date', $month);
+            ->where(function ($q) use ($monthStart, $monthEnd) {
+                // Non-recurring: range intersects month
+                $q->where('recurring', false)
+                    ->where('start_date', '<=', $monthEnd)
+                    ->where('end_date', '>=', $monthStart);
             })
             ->orWhere(function ($q) use ($month) {
-                $q->where('recurring', true)->whereMonth('date', $month);
+                // Recurring: any range that touches this month-of-year (handles spans across months)
+                $q->where('recurring', true)
+                    ->where(function ($qq) use ($month) {
+                        $qq->whereMonth('start_date', $month)
+                            ->orWhereMonth('end_date', $month)
+                            ->orWhere(function ($qqq) use ($month) {
+                                $qqq->whereMonth('start_date', '<=', $month)
+                                    ->whereMonth('end_date', '>=', $month);
+                            });
+                    });
             })
-            ->orderBy('date')
+            ->orderBy('start_date')
             ->get();
     }
 
@@ -46,7 +74,7 @@ class CompanyHolidayService
      *  Persist a new CompanyHoliday row.
      * </summary>
      *
-     * @param array $data Validated payload — name, date, recurring
+     * @param array $data Validated payload — name, start_date, end_date, recurring
      * @return CompanyHoliday Created holiday
      */
     public function createCompanyHoliday(array $data): CompanyHoliday

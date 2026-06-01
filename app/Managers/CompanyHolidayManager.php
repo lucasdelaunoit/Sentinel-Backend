@@ -4,6 +4,8 @@ namespace App\Managers;
 
 use App\Models\CompanyHoliday;
 use App\Services\CompanyHolidayService;
+use App\Support\QueryParams;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -16,14 +18,15 @@ class CompanyHolidayManager
 
     /**
      * <summary>
-     *  Return all CompanyHoliday rows ordered by date.
+     *  Return paginated CompanyHoliday rows ordered by date.
      * </summary>
      *
-     * @return Collection<int, CompanyHoliday>
+     * @param QueryParams $params Normalized query params
+     * @return LengthAwarePaginator
      */
-    public function getAgileCompanyHolidays(): Collection
+    public function getAgileCompanyHolidays(QueryParams $params): LengthAwarePaginator
     {
-        return $this->companyHolidayService->getAgileCompanyHolidays();
+        return $this->companyHolidayService->getAgileCompanyHolidays($params);
     }
 
     /**
