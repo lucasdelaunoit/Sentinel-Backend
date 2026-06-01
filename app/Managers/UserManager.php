@@ -185,6 +185,19 @@ class UserManager
 
     /**
      * <summary>
+     *  Get severity-sorted recommendation list for a user (Overview tab).
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return array Recommendation rows {id, icon, title, description, severity, priority}
+     */
+    public function getUserRecommendations(User $user): array
+    {
+        return $this->userService->getUserRecommendations($user);
+    }
+
+    /**
+     * <summary>
      *  Competency radar (per SkillCategory) for one user.
      * </summary>
      *

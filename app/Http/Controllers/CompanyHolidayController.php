@@ -37,6 +37,32 @@ class CompanyHolidayController extends Controller
 
     /**
      * <summary>
+     *  Return all CompanyHoliday rows applicable to the given year/month (including recurring).
+     * </summary>
+     *
+     * @param Request $request Incoming HTTP request — expects `year` and `month` query params
+     * @return AnonymousResourceCollection
+     */
+    public function getCompanyHolidaysForMonth(Request $request): AnonymousResourceCollection
+    {
+        // Validate (Controller)
+        $validated = $request->validate([
+            'year'  => ['required', 'integer', 'min:1970', 'max:2999'],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+        ]);
+
+        // Act (Manager)
+        $holidays = $this->companyHolidayManager->getCompanyHolidaysForMonth(
+            (int) $validated['year'],
+            (int) $validated['month'],
+        );
+
+        // Return (Controller)
+        return CompanyHolidayResource::collection($holidays);
+    }
+
+    /**
+     * <summary>
      *  Create a CompanyHoliday.
      * </summary>
      *

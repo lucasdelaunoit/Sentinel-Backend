@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
     Route::get('/users/{user}/stats', [UserController::class, 'getUserStats']);
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
+    Route::get('/users/{user}/recommendations', [UserController::class, 'getUserRecommendations']);
     Route::get('/users/{user}/competency-radar', [UserController::class, 'getUserCompetencyRadar']);
     Route::get('/users/{user}/projects', [ProjectController::class, 'getAgileProjectsForUser']);
     Route::get('/users/{user}/skills', [SkillController::class, 'getAgileSkillsForUser']);
@@ -118,6 +119,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         /* ----------------- HOLIDAYS ----------------- */
         Route::get('/holidays', [CompanyHolidayController::class, 'getAgileCompanyHolidays']);
+        Route::get('/holidays/month', [CompanyHolidayController::class, 'getCompanyHolidaysForMonth']);
         Route::post('/holidays', [CompanyHolidayController::class, 'createCompanyHoliday']);
         Route::patch('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'updateCompanyHoliday']);
         Route::delete('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'deleteCompanyHoliday']);

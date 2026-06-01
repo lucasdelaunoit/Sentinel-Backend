@@ -183,6 +183,19 @@ class UserController extends Controller
 
     /**
      * <summary>
+     *  Recommendation list for a user, derived from the criticality breakdown.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse Recommendation rows {id, icon, title, description, severity, priority}
+     */
+    public function getUserRecommendations(User $user): JsonResponse
+    {
+        return response()->json($this->userManager->getUserRecommendations($user));
+    }
+
+    /**
+     * <summary>
      *  Retrieve the competency-radar series (per SkillCategory) for a user.
      * </summary>
      *

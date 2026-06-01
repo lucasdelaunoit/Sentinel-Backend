@@ -389,6 +389,99 @@ class UserService
 
     /**
      * <summary>
+     *  Build the recommendation list for a user based on the criticality breakdown
+     *  (score, unique_skills, silo_count, bus_factor_projects). Severity-sorted.
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return array<int, array{id:string,icon:string,title:string,description:string,severity:string,priority:string}>
+     */
+    public function getUserRecommendations(User $user): array
+    {
+        $breakdown = $this->criticalityCalculator->computeRawForUser($user);
+        $score = (int) $breakdown['score'];
+        $unique = (int) $breakdown['unique_skills'];
+        $silo = (int) $breakdown['silo_count'];
+        $busProjects = (int) $breakdown['bus_factor_projects'];
+
+        $recs = [];
+
+        if ($busProjects > 0) {
+            $recs[] = [
+                'id' => 'bus-factor-mitigate',
+                'icon' => 'git-branch',
+                'title' => "Mitigate bus-factor on {$busProjects} project" . ($busProjects > 1 ? 's' : ''),
+                'description' => 'Assign a secondary owner to each affected project to ensure continuity if this employee is absent.',
+                'severity' => Severity::CRITICAL->value,
+                'priority' => 'high',
+            ];
+        }
+
+        if ($unique > 0) {
+            $recs[] = [
+                'id' => 'unique-skills-transfer',
+                'icon' => 'users',
+                'title' => "{$unique} skill" . ($unique > 1 ? 's' : '') . ' held only by this employee',
+                'description' => 'Schedule knowledge transfer sessions or pair-work to spread these skills across the team.',
+                'severity' => Severity::CRITICAL->value,
+                'priority' => 'high',
+            ];
+        }
+
+        if ($busProjects === 0 && $silo > 0) {
+            $recs[] = [
+                'id' => 'silo-monitor',
+                'icon' => 'alert-triangle',
+                'title' => "Silo exposure on {$silo} project" . ($silo > 1 ? 's' : ''),
+                'description' => 'Active on projects where this employee is the sole holder of a required skill. Monitor for escalation.',
+                'severity' => Severity::WARNING->value,
+                'priority' => 'medium',
+            ];
+        }
+
+        if ($score >= 70) {
+            $recs[] = [
+                'id' => 'high-criticality-review',
+                'icon' => 'shield-alert',
+                'title' => 'Schedule a knowledge-transfer review this quarter',
+                'description' => 'Composite criticality is high — convene a session with the team lead to plan redundancy.',
+                'severity' => Severity::CRITICAL->value,
+                'priority' => 'high',
+            ];
+        } elseif ($score >= 40 && $recs === []) {
+            $recs[] = [
+                'id' => 'criticality-drift',
+                'icon' => 'alert-triangle',
+                'title' => 'Monitor criticality drift',
+                'description' => 'Score is in the medium band. Watch for new silos or project assignments that could escalate risk.',
+                'severity' => Severity::WARNING->value,
+                'priority' => 'medium',
+            ];
+        }
+
+        if ($recs === []) {
+            $recs[] = [
+                'id' => 'no-risk',
+                'icon' => 'lightbulb',
+                'title' => 'No structural risk detected',
+                'description' => 'Knowledge is well distributed. Keep monitoring as the team and skill graph evolve.',
+                'severity' => Severity::OK->value,
+                'priority' => 'low',
+            ];
+        }
+
+        $severityRank = [
+            Severity::CRITICAL->value => 0,
+            Severity::WARNING->value => 1,
+            Severity::OK->value => 2,
+        ];
+        usort($recs, fn($a, $b) => $severityRank[$a['severity']] <=> $severityRank[$b['severity']]);
+
+        return $recs;
+    }
+
+    /**
+     * <summary>
      *  Build the criticality Stat for a user — reads precomputed users.criticality_raw.
      * </summary>
      *

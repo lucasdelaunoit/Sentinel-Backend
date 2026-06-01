@@ -32,6 +32,12 @@ class AbsenceService
             ->allowedFilters([
                 AllowedFilter::exact('type'),
                 AllowedFilter::callback('search', fn($q, $v) => $q->where('reason', 'like', "%{$v}%")),
+                AllowedFilter::callback(
+                    'upcoming',
+                    fn($q, $v) => filter_var($v, FILTER_VALIDATE_BOOLEAN)
+                        ? $q->whereDate('end_date', '>=', Carbon::today())
+                        : $q,
+                ),
             ])
             ->allowedSorts([
                 AllowedSort::field('start_date'),
