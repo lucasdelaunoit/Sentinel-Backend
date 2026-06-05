@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AbsenceHalf;
 use App\Models\CompanyHoliday;
 use App\Models\OrganizationSetting;
 use Carbon\CarbonImmutable;
@@ -72,6 +73,72 @@ class CalendarService
 
     /**
      * <summary>
+     *  Count working HALF-days in the inclusive absence range [start.startHalf … end.endHalf],
+     *  excluding off-days and holidays. This is the "normalized" absence length — the real number
+     *  of working days an absence consumes. Returns a float in 0.5 steps (a half-day = 0.5).
+     *  Pure computation — caller provides settings + holidays so no DB access happens here.
+     * </summary>
+     *
+     * @param mixed $startDate Absence first day (date|string|Carbon)
+     * @param AbsenceHalf|string|null $startHalf Half the first day starts on (afternoon drops its morning)
+     * @param mixed $endDate Absence last day
+     * @param AbsenceHalf|string|null $endHalf Half the last day ends on (morning drops its afternoon)
+     * @param OrganizationSetting $setting Singleton settings (working_days mask)
+     * @param iterable<CompanyHoliday> $holidays All company holidays (recurring projected across the span)
+     * @return float Working-day count in 0.5 steps
+     */
+    public function countWorkingHalfDays(
+        mixed $startDate,
+        AbsenceHalf|string|null $startHalf,
+        mixed $endDate,
+        AbsenceHalf|string|null $endHalf,
+        OrganizationSetting $setting,
+        iterable $holidays,
+    ): float {
+        $start = CarbonImmutable::parse($startDate)->startOfDay();
+        $end   = CarbonImmutable::parse($endDate)->startOfDay();
+        if ($end->lt($start)) {
+            return 0.0;
+        }
+
+        $workingMask = $setting->working_days ?? [1, 1, 1, 1, 1, 0, 0];
+        $holidaySet  = $this->buildHolidayDateSetForRange($holidays, $start, $end);
+
+        $startIsAfternoon = $this->halfValue($startHalf) === AbsenceHalf::Afternoon->value;
+        $endIsMorning     = $this->halfValue($endHalf) === AbsenceHalf::Morning->value;
+        $startIso         = $start->toDateString();
+        $endIso           = $end->toDateString();
+
+        $total = 0.0;
+        foreach (CarbonPeriod::create($start, $end) as $day) {
+            $weekdayIdx = (int) $day->dayOfWeekIso - 1; // 0 = Monday
+            $iso        = $day->toDateString();
+
+            $isWorking = !isset($holidaySet[$iso]) && (($workingMask[$weekdayIdx] ?? 0) === 1);
+            if (!$isWorking) {
+                continue;
+            }
+
+            $halves = 2;
+            if ($iso === $startIso && $startIsAfternoon) {
+                $halves -= 1; // absence begins in the afternoon → no morning
+            }
+            if ($iso === $endIso && $endIsMorning) {
+                $halves -= 1; // absence ends in the morning → no afternoon
+            }
+            $total += $halves * 0.5;
+        }
+
+        return $total;
+    }
+
+    private function halfValue(AbsenceHalf|string|null $half): ?string
+    {
+        return $half instanceof AbsenceHalf ? $half->value : $half;
+    }
+
+    /**
+     * <summary>
      *  Build a date-keyed lookup for holidays. Recurring holidays are projected onto the requested year.
      * </summary>
      *
@@ -96,6 +163,47 @@ class CalendarService
                 $set[$day->toDateString()] = true;
             }
         }
+        return $set;
+    }
+
+    /**
+     * <summary>
+     *  Holiday date-set covering an arbitrary range, projecting recurring holidays onto every
+     *  year the range spans (an absence may cross a year boundary).
+     * </summary>
+     *
+     * @param iterable<CompanyHoliday> $holidays
+     * @param CarbonImmutable $rangeStart Range first day
+     * @param CarbonImmutable $rangeEnd Range last day
+     * @return array<string, true>
+     */
+    private function buildHolidayDateSetForRange(iterable $holidays, CarbonImmutable $rangeStart, CarbonImmutable $rangeEnd): array
+    {
+        $set   = [];
+        $years = range($rangeStart->year, $rangeEnd->year);
+
+        foreach ($holidays as $holiday) {
+            $start = CarbonImmutable::parse($holiday->start_date);
+            $end   = CarbonImmutable::parse($holiday->end_date);
+
+            if ($holiday->recurring) {
+                foreach ($years as $year) {
+                    $s = $start->setYear($year);
+                    $e = $end->setYear($year);
+                    if ($e->lt($s)) {
+                        $e = $e->addYear();
+                    }
+                    foreach (CarbonPeriod::create($s, $e) as $day) {
+                        $set[$day->toDateString()] = true;
+                    }
+                }
+            } else {
+                foreach (CarbonPeriod::create($start, $end) as $day) {
+                    $set[$day->toDateString()] = true;
+                }
+            }
+        }
+
         return $set;
     }
 }

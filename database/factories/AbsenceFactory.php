@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AbsenceHalf;
 use App\Enums\AbsenceType;
 use App\Models\Absence;
 use App\Models\User;
@@ -19,7 +20,9 @@ class AbsenceFactory extends Factory
         return [
             'user_id'    => User::factory(),
             'start_date' => $start,
+            'start_half' => AbsenceHalf::Morning,
             'end_date'   => fake()->dateTimeInInterval($start, $duration . ' days'),
+            'end_half'   => AbsenceHalf::Afternoon,
             'type' => fake()->randomElement([
                 AbsenceType::Vacation,
                 AbsenceType::Vacation,

@@ -3,6 +3,7 @@
 namespace App\Managers;
 
 use App\Models\CompanyHoliday;
+use App\Services\CalendarImpactService;
 use App\Services\CompanyHolidayService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -14,6 +15,7 @@ class CompanyHolidayManager
 {
     public function __construct(
         private readonly CompanyHolidayService $companyHolidayService,
+        private readonly CalendarImpactService $calendarImpactService,
     ) {}
 
     /**
@@ -54,7 +56,15 @@ class CompanyHolidayManager
      */
     public function createCompanyHoliday(array $data): CompanyHoliday
     {
-        return DB::transaction(fn() => $this->companyHolidayService->createCompanyHoliday($data));
+        $freezeIds = $data['freeze_absence_ids'] ?? [];
+        unset($data['freeze_absence_ids']);
+
+        return DB::transaction(function () use ($data, $freezeIds) {
+            // Freeze the kept absences at their pre-change count BEFORE the holiday exists.
+            $this->calendarImpactService->freeze($freezeIds);
+
+            return $this->companyHolidayService->createCompanyHoliday($data);
+        });
     }
 
     /**
@@ -69,7 +79,15 @@ class CompanyHolidayManager
      */
     public function updateCompanyHoliday(CompanyHoliday $holiday, array $data): CompanyHoliday
     {
-        return DB::transaction(fn() => $this->companyHolidayService->updateCompanyHoliday($holiday, $data));
+        $freezeIds = $data['freeze_absence_ids'] ?? [];
+        unset($data['freeze_absence_ids']);
+
+        return DB::transaction(function () use ($holiday, $data, $freezeIds) {
+            // Freeze the kept absences at their pre-change count BEFORE the holiday changes.
+            $this->calendarImpactService->freeze($freezeIds);
+
+            return $this->companyHolidayService->updateCompanyHoliday($holiday, $data);
+        });
     }
 
     /**

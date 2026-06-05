@@ -13,6 +13,9 @@ class UpdateCompanyHolidayRequest extends FormRequest
             'start_date' => ['sometimes', 'required', 'date'],
             'end_date'   => ['sometimes', 'required', 'date', 'after_or_equal:start_date'],
             'recurring'  => ['sometimes', 'boolean'],
+            // Future absences the user chose to KEEP (freeze at current count) before this change.
+            'freeze_absence_ids'   => ['sometimes', 'array'],
+            'freeze_absence_ids.*' => ['integer'],
         ];
     }
 }

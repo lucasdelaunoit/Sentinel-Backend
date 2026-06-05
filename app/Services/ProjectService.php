@@ -673,6 +673,147 @@ class ProjectService
 
     /**
      * <summary>
+     *  Fragility-alert feed for a project. Derives a prioritized list of decision-support alerts
+     *  purely from the knowledge-coverage matrix and the project's cached state — bus factor,
+     *  active absences and the skills they expose, knowledge silos, uncovered skills, fragility
+     *  trajectory and an overdue deadline. Read-only. Each alert is
+     *  { id, severity (critical|warning|info), category, title, detail }.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array<int, array{id:string, severity:string, category:string, title:string, detail:string}>
+     */
+    public function getProjectFragilityAlerts(Project $project): array
+    {
+        $coverage = $this->getProjectKnowledgeCoverage($project);
+        $alerts = [];
+
+        // Bus factor
+        $busFactor = (int) $project->bus_factor;
+        if ($busFactor <= 1) {
+            $silos = count(array_filter($coverage, fn($c) => $c['status'] === 'silo'));
+            $alerts[] = [
+                'id' => 'bus-factor',
+                'severity' => 'critical',
+                'category' => 'Bus Factor',
+                'title' => 'Project has a Bus Factor of 1',
+                'detail' => $silos . ' skill' . ($silos === 1 ? ' has' : 's have')
+                    . ' only one active owner. Losing that person would immediately block the project.',
+            ];
+        } elseif ($busFactor === 2) {
+            $alerts[] = [
+                'id' => 'bus-factor',
+                'severity' => 'warning',
+                'category' => 'Bus Factor',
+                'title' => 'Bus Factor is low (2)',
+                'detail' => 'Two absences could put the project at serious risk. Consider cross-training.',
+            ];
+        }
+
+        // Members currently on leave and the skills their absence exposes
+        $onLeave = [];
+        foreach ($coverage as $row) {
+            foreach ($row['holders'] as $holder) {
+                if (!$holder['on_leave_today']) {
+                    continue;
+                }
+                $id = $holder['id'];
+                $onLeave[$id] ??= [
+                    'name' => trim("{$holder['firstname']} {$holder['lastname']}"),
+                    'uncovered' => [],
+                    'silo' => [],
+                ];
+                if ($row['status'] === 'uncovered') {
+                    $onLeave[$id]['uncovered'][] = $row['skill']['name'];
+                } elseif ($row['status'] === 'silo') {
+                    $onLeave[$id]['silo'][] = $row['skill']['name'];
+                }
+            }
+        }
+        foreach ($onLeave as $id => $member) {
+            $hasUncovered = $member['uncovered'] !== [];
+            $alerts[] = [
+                'id' => "leave-{$id}",
+                'severity' => $hasUncovered ? 'critical' : 'warning',
+                'category' => 'Active Absence',
+                'title' => "{$member['name']} is currently on leave",
+                'detail' => $hasUncovered
+                    ? implode(', ', $member['uncovered']) . ' now has zero active coverage.'
+                    : ($member['silo'] !== []
+                        ? implode(', ', $member['silo']) . ' dropped to a single active holder.'
+                        : 'All required skills remain covered by other team members.'),
+            ];
+        }
+
+        // Knowledge silos (single active holder)
+        foreach ($coverage as $row) {
+            if ($row['status'] !== 'silo') {
+                continue;
+            }
+            $alerts[] = [
+                'id' => "silo-{$row['skill']['id']}",
+                'severity' => 'warning',
+                'category' => 'Knowledge Silo',
+                'title' => "\"{$row['skill']['name']}\" relies on a single person",
+                'detail' => "Only one active team member covers {$row['skill']['name']}. "
+                    . 'Their absence would leave the project without coverage.',
+            ];
+        }
+
+        // Uncovered required skills (no active holder)
+        foreach ($coverage as $row) {
+            if ($row['status'] !== 'uncovered') {
+                continue;
+            }
+            $alerts[] = [
+                'id' => "uncovered-{$row['skill']['id']}",
+                'severity' => 'critical',
+                'category' => 'Uncovered Skill',
+                'title' => "\"{$row['skill']['name']}\" is not actively covered",
+                'detail' => 'This required skill has no available holder on the team. Assign someone or recruit.',
+            ];
+        }
+
+        // Fragility trajectory (health = 100 - fragility_raw)
+        $health = 100 - (int) $project->fragility_raw;
+        if ($health < 50) {
+            $alerts[] = [
+                'id' => 'trajectory',
+                'severity' => 'critical',
+                'category' => 'Project Trajectory',
+                'title' => "Project trajectory is critical ({$health}/100)",
+                'detail' => 'Multiple risk factors are combining. Immediate manager intervention recommended.',
+            ];
+        } elseif ($health < 65) {
+            $alerts[] = [
+                'id' => 'trajectory',
+                'severity' => 'warning',
+                'category' => 'Project Trajectory',
+                'title' => "Project trajectory is degraded ({$health}/100)",
+                'detail' => 'Risk factors are accumulating. Monitor closely and address knowledge silos.',
+            ];
+        }
+
+        // Overdue deadline
+        if (
+            $project->completed_at === null
+            && $project->deadline !== null
+            && $project->deadline->startOfDay()->lt(Carbon::today())
+        ) {
+            $alerts[] = [
+                'id' => 'overdue',
+                'severity' => 'critical',
+                'category' => 'Deadline',
+                'title' => 'Project is past its deadline',
+                'detail' => 'Deadline was ' . $project->deadline->format('d M Y') . '. Delivery risk is high.',
+            ];
+        }
+
+        return $alerts;
+    }
+
+    /**
+     * <summary>
      *  Competency radar for a project. One axis per SkillCategory in the DB (stable order by name).
      *  value = round(avg(level) / 5 * 100) over all EmployeeSkill rows of the team where the skill
      *  belongs to the category. Categories with no held skill in the team return 0. target is fixed

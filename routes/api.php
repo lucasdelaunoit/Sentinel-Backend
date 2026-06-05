@@ -7,6 +7,7 @@ use App\Http\Controllers\CompanyHolidayController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\OrganizationSettingController;
+use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RuleController;
 use App\Http\Controllers\SimulationController;
@@ -60,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/knowledge-coverage', [ProjectController::class, 'getProjectKnowledgeCoverage']);
     Route::get('/projects/{project}/competency-radar', [ProjectController::class, 'getProjectCompetencyRadar']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
+    Route::get('/projects/{project}/fragility-alerts', [ProjectController::class, 'getProjectFragilityAlerts']);
     Route::get('/projects/{project}/users', [UserController::class, 'getAgileUsersForProject']);
     Route::post('/projects/{project}/users', [ProjectController::class, 'attachUserToProject']);
     Route::delete('/projects/{project}/users/{user}', [ProjectController::class, 'detachUserFromProject']);
@@ -102,6 +104,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Simulations
     Route::apiResource('simulations', SimulationController::class)->except(['update']);
 
+    /** ---------------------- [ PLANNING ] ---------------------- */
+    Route::get('/planning', [PlanningController::class, 'index']);
+    Route::post('/planning/simulate', [PlanningController::class, 'simulate']);
+    Route::post('/planning/apply', [PlanningController::class, 'apply']);
+
     /* ----------------- DERIVED METRICS (not settings) ----------------- */
     Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
 
@@ -114,6 +121,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         /* ----------------- CALENDAR ----------------- */
         Route::get('/calendar', [CalendarController::class, 'getCalendarSummary']);
+        Route::post('/calendar/impact', [CalendarController::class, 'previewImpact']);
         Route::get('/workdays', [CalendarController::class, 'getWorkingDays']);
         Route::patch('/working-days', [CalendarController::class, 'updateCalendarSetting']);
 

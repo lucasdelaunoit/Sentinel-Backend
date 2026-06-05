@@ -231,6 +231,23 @@ class ProjectController extends Controller
 
     /**
      * <summary>
+     *  Retrieve the prioritized fragility-alert feed for a project (decision-support).
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return JsonResponse Alert rows wrapped in { data: [...] }
+     */
+    public function getProjectFragilityAlerts(Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $alerts = $this->projectManager->getProjectFragilityAlerts($project);
+
+        // Return (Controller)
+        return response()->json(['data' => $alerts]);
+    }
+
+    /**
+     * <summary>
      *  Attach a user to a project.
      * </summary>
      *

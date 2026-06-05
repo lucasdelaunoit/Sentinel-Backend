@@ -3,6 +3,7 @@
 namespace App\Managers;
 
 use App\Models\OrganizationSetting;
+use App\Services\CalendarImpactService;
 use App\Services\CalendarService;
 use App\Services\CompanyHolidayService;
 use App\Services\OrganizationSettingService;
@@ -15,6 +16,7 @@ class CalendarManager
         private readonly OrganizationSettingService $organizationSettingService,
         private readonly CompanyHolidayService      $companyHolidayService,
         private readonly CalendarService            $calendarService,
+        private readonly CalendarImpactService      $calendarImpactService,
     ) {}
 
     /**
@@ -28,7 +30,15 @@ class CalendarManager
      */
     public function updateCalendarSetting(array $data): OrganizationSetting
     {
-        return DB::transaction(fn() => $this->organizationSettingService->updateCalendarSetting($data));
+        $freezeIds = $data['freeze_absence_ids'] ?? [];
+        unset($data['freeze_absence_ids']);
+
+        return DB::transaction(function () use ($data, $freezeIds) {
+            // Freeze the kept absences at their pre-change count BEFORE the working week changes.
+            $this->calendarImpactService->freeze($freezeIds);
+
+            return $this->organizationSettingService->updateCalendarSetting($data);
+        });
     }
 
     /**

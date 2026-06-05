@@ -441,4 +441,19 @@ class ProjectManager
     {
         return $this->projectService->getProjectCompetencyRadar($project);
     }
+
+    /**
+     * <summary>
+     *  Per-project fragility-alert feed — prioritized decision-support alerts derived from the
+     *  coverage matrix and cached project state (bus factor, active absences, silos, uncovered
+     *  skills, trajectory, deadline).
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Alert rows keyed numerically
+     */
+    public function getProjectFragilityAlerts(Project $project): array
+    {
+        return $this->projectService->getProjectFragilityAlerts($project);
+    }
 }

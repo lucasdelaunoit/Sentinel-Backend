@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AbsenceHalf;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\Absence;
@@ -142,7 +143,8 @@ class AbsenceService
     /**
      * <summary>
      *  Build the days-off-this-year Stat for a user. Sums inclusive day counts of every absence
-     *  clamped to [Jan 1, Dec 31] of the current year. Single-day absence counts as 1 day.
+     *  clamped to [Jan 1, Dec 31] of the current year. Half-day boundaries deduct 0.5 each
+     *  (afternoon start / morning end) when the real boundary falls inside the clamped window.
      * </summary>
      *
      * @param User $user Target user
@@ -150,19 +152,30 @@ class AbsenceService
      */
     public function getUserDaysOffThisYearStat(User $user): Stat
     {
-        $yearStart = Carbon::now()->startOfYear()->toDateString();
-        $yearEnd = Carbon::now()->endOfYear()->toDateString();
+        $yearStart = Carbon::now()->startOfYear();
+        $yearEnd = Carbon::now()->endOfYear();
 
         $absences = $user->absences()
-            ->whereDate('start_date', '<=', $yearEnd)
-            ->whereDate('end_date', '>=', $yearStart)
-            ->get(['start_date', 'end_date']);
+            ->whereDate('start_date', '<=', $yearEnd->toDateString())
+            ->whereDate('end_date', '>=', $yearStart->toDateString())
+            ->get(['start_date', 'end_date', 'start_half', 'end_half']);
 
-        $days = 0;
+        $days = 0.0;
         foreach ($absences as $absence) {
-            $start = Carbon::parse($absence->start_date)->max(Carbon::parse($yearStart));
-            $end = Carbon::parse($absence->end_date)->min(Carbon::parse($yearEnd));
-            $days += $start->diffInDays($end) + 1;
+            $rawStart = Carbon::parse($absence->start_date);
+            $rawEnd = Carbon::parse($absence->end_date);
+            $start = $rawStart->copy()->max($yearStart);
+            $end = $rawEnd->copy()->min($yearEnd);
+
+            $count = $start->diffInDays($end) + 1;
+            if ($rawStart->gte($yearStart) && $absence->start_half === AbsenceHalf::Afternoon) {
+                $count -= 0.5;
+            }
+            if ($rawEnd->lte($yearEnd) && $absence->end_half === AbsenceHalf::Morning) {
+                $count -= 0.5;
+            }
+
+            $days += max(0.5, $count);
         }
 
         return new Stat(
