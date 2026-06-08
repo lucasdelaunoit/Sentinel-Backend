@@ -59,6 +59,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/stats', [ProjectController::class, 'getProjectStats']);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
     Route::get('/projects/{project}/knowledge-coverage', [ProjectController::class, 'getProjectKnowledgeCoverage']);
+    Route::get('/projects/{project}/knowledge-coverage/summary', [ProjectController::class, 'getProjectKnowledgeCoverageSummary']);
+    Route::get('/projects/{project}/knowledge-coverage/matrix', [ProjectController::class, 'getProjectKnowledgeMatrix']);
+    Route::get('/projects/{project}/skills/{skill}/holders', [ProjectController::class, 'getProjectSkillHolders']);
     Route::get('/projects/{project}/competency-radar', [ProjectController::class, 'getProjectCompetencyRadar']);
     Route::get('/projects/{project}/metrics', [ProjectController::class, 'getProjectMetrics']);
     Route::get('/projects/{project}/fragility-alerts', [ProjectController::class, 'getProjectFragilityAlerts']);

@@ -15,6 +15,7 @@ use App\Metrics\Calculators\ProjectsTotalCalculator;
 use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\Scales\FragilityScale;
 use App\Models\Project;
+use App\Models\Skill;
 use App\Models\User;
 use App\Services\ProjectService;
 use App\Services\SkillCoverageService;
@@ -421,12 +422,56 @@ class ProjectManager
      *  active_holders_count, status (uncovered/silo/covered), max_level, team_size.
      * </summary>
      *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
      * @param Project $project Target project
-     * @return array Knowledge-coverage rows keyed numerically
+     * @return LengthAwarePaginator Paginated knowledge-coverage rows
      */
-    public function getProjectKnowledgeCoverage(Project $project): array
+    public function getProjectKnowledgeCoverage(QueryParams $params, Project $project): LengthAwarePaginator
     {
-        return $this->projectService->getProjectKnowledgeCoverage($project);
+        return $this->projectService->getProjectKnowledgeCoverage($params, $project);
+    }
+
+    /**
+     * <summary>
+     *  Project-wide coverage summary (covered/silo/uncovered/total) over all required skills,
+     *  independent of list pagination.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array{covered:int, silo:int, uncovered:int, total:int}
+     */
+    public function getProjectKnowledgeCoverageSummary(Project $project): array
+    {
+        return $this->projectService->getProjectKnowledgeCoverageSummary($project);
+    }
+
+    /**
+     * <summary>
+     *  Full (unpaginated) knowledge-coverage matrix with complete holder lists, for dashboard cards
+     *  that aggregate across every required skill.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Full knowledge-coverage rows
+     */
+    public function getProjectKnowledgeMatrix(Project $project): array
+    {
+        return $this->projectService->getProjectKnowledgeMatrix($project);
+    }
+
+    /**
+     * <summary>
+     *  Paginated holders of a single skill within a project (level + leave status per member).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @param Project $project Target project
+     * @param Skill $skill Target skill
+     * @return LengthAwarePaginator Paginated holder rows
+     */
+    public function getProjectSkillHolders(QueryParams $params, Project $project, Skill $skill): LengthAwarePaginator
+    {
+        return $this->projectService->getProjectSkillHolders($params, $project, $skill);
     }
 
     /**

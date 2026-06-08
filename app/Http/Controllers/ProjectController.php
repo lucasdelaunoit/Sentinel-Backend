@@ -197,19 +197,77 @@ class ProjectController extends Controller
 
     /**
      * <summary>
-     *  Retrieve the knowledge-coverage breakdown for a project's skill requirements.
+     *  Retrieve the paginated, searchable, sortable, filterable knowledge-coverage breakdown for a
+     *  project's skill requirements. Each row carries its first 5 holders plus holders_total.
+     * </summary>
+     *
+     * @param Request $request Pagination, filter & sort query parameters
+     * @param Project $project Route-model bound project
+     * @return JsonResponse Paginated knowledge-coverage rows
+     */
+    public function getProjectKnowledgeCoverage(Request $request, Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $rows = $this->projectManager->getProjectKnowledgeCoverage(QueryParams::fromRequest($request), $project);
+
+        // Return (Controller)
+        return response()->json($rows);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the project-wide coverage summary (covered/silo/uncovered/total) over all required
+     *  skills, independent of list pagination.
      * </summary>
      *
      * @param Project $project Route-model bound project
-     * @return JsonResponse Knowledge-coverage rows wrapped in { data: [...] }
+     * @return JsonResponse Summary counts wrapped in { data: {...} }
      */
-    public function getProjectKnowledgeCoverage(Project $project): JsonResponse
+    public function getProjectKnowledgeCoverageSummary(Project $project): JsonResponse
     {
         // Act (Manager)
-        $rows = $this->projectManager->getProjectKnowledgeCoverage($project);
+        $summary = $this->projectManager->getProjectKnowledgeCoverageSummary($project);
+
+        // Return (Controller)
+        return response()->json(['data' => $summary]);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the full (unpaginated) knowledge-coverage matrix with complete holder lists, for
+     *  dashboard cards that aggregate across every required skill.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return JsonResponse Full matrix rows wrapped in { data: [...] }
+     */
+    public function getProjectKnowledgeMatrix(Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $rows = $this->projectManager->getProjectKnowledgeMatrix($project);
 
         // Return (Controller)
         return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * <summary>
+     *  Retrieve the paginated holders of a single skill within a project (level + leave status per
+     *  member). Backs the "view all holders" modal.
+     * </summary>
+     *
+     * @param Request $request Pagination, filter & sort query parameters
+     * @param Project $project Route-model bound project
+     * @param Skill $skill Route-model bound skill
+     * @return JsonResponse Paginated holder rows
+     */
+    public function getProjectSkillHolders(Request $request, Project $project, Skill $skill): JsonResponse
+    {
+        // Act (Manager)
+        $holders = $this->projectManager->getProjectSkillHolders(QueryParams::fromRequest($request), $project, $skill);
+
+        // Return (Controller)
+        return response()->json($holders);
     }
 
     /**

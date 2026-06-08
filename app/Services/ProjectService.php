@@ -14,11 +14,13 @@ use App\Enums\ProjectStatus;
 use App\Enums\UserStatus;
 use App\Metrics\Stat;
 use App\Models\Project;
+use App\Models\Skill;
 use App\Models\SkillCategory;
 use App\Models\User;
 use App\Support\QueryParams;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -584,10 +586,66 @@ class ProjectService
 
     /**
      * <summary>
-     *  Knowledge-coverage breakdown for a project. Per project skill requirement, lists
-     *  team members who hold that skill at level >= required_level. active_holders excludes
-     *  members whose Absence range covers today. status = uncovered (0 active), silo (1),
-     *  covered (>=2). max_level = max level across all holders regardless of level. Read-only.
+     *  Correlated scalar subquery counting ACTIVE holders of the current skill row: project members
+     *  who hold the skill at level >= psr.required_level and whose Absence range does not cover today.
+     *  References skills.id and psr.required_level from the outer query, so it only works inside the
+     *  knowledge-coverage base query. Placeholders bind to [project_id, today, today].
+     * </summary>
+     */
+    private function activeHoldersCountSql(): string
+    {
+        return "(select count(*) from project_users pu
+                   where pu.project_id = ?
+                     and exists (
+                       select 1 from user_skills us
+                       where us.user_id = pu.user_id
+                         and us.skill_id = skills.id
+                         and us.level >= psr.required_level
+                     )
+                     and not exists (
+                       select 1 from absences ab
+                       where ab.user_id = pu.user_id
+                         and ab.start_date <= ?
+                         and ab.end_date >= ?
+                     ))";
+    }
+
+    /**
+     * <summary>
+     *  Base query for a project's knowledge coverage: one row per required skill, enriched with
+     *  computed columns active_holders_count (level>=required, not on leave today), max_level
+     *  (best level any project member holds) and holders_total (members holding the skill at any
+     *  level). Drives the paginated list, the status filter and the summary aggregate.
+     * </summary>
+     */
+    private function knowledgeCoverageBaseQuery(Project $project): Builder
+    {
+        $pid = $project->getKey();
+        $today = Carbon::today()->toDateString();
+
+        $maxLevelSql = "(select coalesce(max(us.level), 0) from user_skills us
+                           join project_users pu on pu.user_id = us.user_id and pu.project_id = ?
+                           where us.skill_id = skills.id)";
+
+        $holdersTotalSql = "(select count(*) from project_users pu
+                               join user_skills us on us.user_id = pu.user_id and us.skill_id = skills.id
+                               where pu.project_id = ?)";
+
+        return Skill::query()
+            ->join('project_skill_reqs as psr', 'psr.skill_id', '=', 'skills.id')
+            ->where('psr.project_id', $pid)
+            ->with('category')
+            ->select('skills.*', 'psr.required_level')
+            ->selectRaw($this->activeHoldersCountSql() . ' as active_holders_count', [$pid, $today, $today])
+            ->selectRaw($maxLevelSql . ' as max_level', [$pid])
+            ->selectRaw($holdersTotalSql . ' as holders_total', [$pid]);
+    }
+
+    /**
+     * <summary>
+     *  Full (unpaginated) knowledge-coverage matrix: one row per required skill with its COMPLETE
+     *  holder list. Backs server-side consumers that reason over the whole matrix (e.g. fragility
+     *  alerts), where pagination and the 5-holder cap of the list endpoint would be incorrect.
      * </summary>
      *
      * @param Project $project Target project
@@ -601,7 +659,22 @@ class ProjectService
      *     holders: array<int, array{id:int, firstname:?string, lastname:?string, status:string, level:int, on_leave_today:bool}>
      * }>
      */
-    public function getProjectKnowledgeCoverage(Project $project): array
+    /**
+     * <summary>
+     *  Public access to the full (unpaginated) knowledge-coverage matrix with complete holder lists.
+     *  For dashboard cards that aggregate across every required skill (today snapshot, current absence
+     *  impact), where the paginated list endpoint and its 5-holder cap would be incorrect.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array Full knowledge-coverage rows
+     */
+    public function getProjectKnowledgeMatrix(Project $project): array
+    {
+        return $this->knowledgeCoverageMatrix($project);
+    }
+
+    private function knowledgeCoverageMatrix(Project $project): array
     {
         $project->loadMissing([
             'skillRequirements.category',
@@ -673,6 +746,220 @@ class ProjectService
 
     /**
      * <summary>
+     *  Paginated, searchable, sortable, filterable knowledge-coverage breakdown for a project.
+     *  Search matches skill name; filter[category_id] is exact; filter[status] (uncovered/silo/covered)
+     *  filters on the computed active_holders_count. Sortable by name, required_level, active_holders_count,
+     *  max_level and status. Each page row carries its first 5 holders (best level first) plus holders_total
+     *  so the UI can offer "view all". Read-only.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @param Project $project Target project
+     * @return LengthAwarePaginator Paginated coverage rows
+     */
+    public function getProjectKnowledgeCoverage(QueryParams $params, Project $project): LengthAwarePaginator
+    {
+        $pid = $project->getKey();
+        $today = Carbon::today()->toDateString();
+        $statusSql = $this->activeHoldersCountSql();
+
+        $nameSort = AllowedSort::callback('name', fn($q, bool $desc) => $q->orderBy('skills.name', $desc ? 'desc' : 'asc'));
+
+        $paginator = QueryBuilder::for($this->knowledgeCoverageBaseQuery($project), $params->toRequest())
+            ->allowedFilters([
+                AllowedFilter::callback('search', fn($q, $v) => $q->where('skills.name', 'like', "%{$v}%")),
+                AllowedFilter::callback('category_id', fn($q, $v) => $q->where('skills.skill_category_id', $v)),
+                AllowedFilter::callback('status', function ($q, $v) use ($statusSql, $pid, $today) {
+                    match ($v) {
+                        'uncovered' => $q->whereRaw("({$statusSql}) = 0", [$pid, $today, $today]),
+                        'silo' => $q->whereRaw("({$statusSql}) = 1", [$pid, $today, $today]),
+                        'covered' => $q->whereRaw("({$statusSql}) >= 2", [$pid, $today, $today]),
+                        default => null,
+                    };
+                }),
+            ])
+            ->allowedSorts([
+                $nameSort,
+                AllowedSort::callback('required_level', fn($q, bool $desc) => $q->orderBy('psr.required_level', $desc ? 'desc' : 'asc')),
+                AllowedSort::callback('active_holders_count', fn($q, bool $desc) => $q->orderBy('active_holders_count', $desc ? 'desc' : 'asc')),
+                AllowedSort::callback('max_level', fn($q, bool $desc) => $q->orderBy('max_level', $desc ? 'desc' : 'asc')),
+                AllowedSort::callback('status', fn($q, bool $desc) => $q->orderBy('active_holders_count', $desc ? 'desc' : 'asc')),
+            ])
+            ->defaultSort($nameSort)
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
+
+        return $this->attachKnowledgeCoverageHolders($project, $paginator);
+    }
+
+    /**
+     * <summary>
+     *  Transforms each paginated Skill row into the coverage payload, attaching the first 5 holders
+     *  (best level first) computed in PHP against the small project team. Mutates the paginator's
+     *  collection in place and returns it.
+     * </summary>
+     */
+    private function attachKnowledgeCoverageHolders(Project $project, LengthAwarePaginator $paginator): LengthAwarePaginator
+    {
+        $project->loadMissing(['users.skills', 'users.absences']);
+        $today = Carbon::today();
+        $teamSize = $project->users->count();
+
+        $paginator->getCollection()->transform(function ($skill) use ($project, $today, $teamSize) {
+            $holders = [];
+
+            foreach ($project->users as $user) {
+                $userSkill = $user->skills->firstWhere('id', $skill->id);
+                if ($userSkill === null) {
+                    continue;
+                }
+
+                $onLeave = $user->absences->contains(function ($a) use ($today) {
+                    return Carbon::parse($a->start_date)->lte($today)
+                        && Carbon::parse($a->end_date)->gte($today);
+                });
+
+                $holders[] = [
+                    'id' => $user->id,
+                    'firstname' => $user->firstname,
+                    'lastname' => $user->lastname,
+                    'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
+                    'level' => (int) $userSkill->pivot->level,
+                    'on_leave_today' => $onLeave,
+                ];
+            }
+
+            usort($holders, fn($a, $b) => $b['level'] <=> $a['level']);
+
+            $activeCount = (int) $skill->active_holders_count;
+            $status = match (true) {
+                $activeCount === 0 => 'uncovered',
+                $activeCount === 1 => 'silo',
+                default => 'covered',
+            };
+
+            return [
+                'id' => $skill->id,
+                'skill' => [
+                    'id' => $skill->id,
+                    'name' => $skill->name,
+                    'category' => $skill->category?->name,
+                ],
+                'required_level' => (int) $skill->required_level,
+                'max_level' => (int) $skill->max_level,
+                'active_holders_count' => $activeCount,
+                'team_size' => $teamSize,
+                'status' => $status,
+                'holders' => array_slice($holders, 0, 5),
+                'holders_total' => (int) $skill->holders_total,
+            ];
+        });
+
+        return $paginator;
+    }
+
+    /**
+     * <summary>
+     *  Project-wide coverage summary: counts of required skills that are covered (>=2 active holders),
+     *  silo (1) and uncovered (0), plus the total. Computed over ALL required skills, independent of
+     *  pagination, so the dashboard totals stay exact regardless of which list page is shown. Read-only.
+     * </summary>
+     *
+     * @param Project $project Target project
+     * @return array{covered:int, silo:int, uncovered:int, total:int}
+     */
+    public function getProjectKnowledgeCoverageSummary(Project $project): array
+    {
+        $rows = $this->knowledgeCoverageBaseQuery($project)->get();
+
+        $covered = 0;
+        $silo = 0;
+        $uncovered = 0;
+
+        foreach ($rows as $row) {
+            $active = (int) $row->active_holders_count;
+            if ($active === 0) {
+                $uncovered++;
+            } elseif ($active === 1) {
+                $silo++;
+            } else {
+                $covered++;
+            }
+        }
+
+        return [
+            'covered' => $covered,
+            'silo' => $silo,
+            'uncovered' => $uncovered,
+            'total' => $rows->count(),
+        ];
+    }
+
+    /**
+     * <summary>
+     *  Paginated holders of a single skill within a project — every team member who holds the skill at
+     *  any level, with their level and today's leave status. Backs the "view all holders" modal opened
+     *  from a coverage row. Search matches name/email; sortable by name. Read-only.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @param Project $project Target project
+     * @param Skill $skill Target skill
+     * @return LengthAwarePaginator Paginated holder rows
+     */
+    public function getProjectSkillHolders(QueryParams $params, Project $project, Skill $skill): LengthAwarePaginator
+    {
+        $today = Carbon::today();
+
+        $base = $project->users()
+            ->whereHas('skills', fn($q) => $q->where('skills.id', $skill->id))
+            ->with([
+                'skills' => fn($q) => $q->where('skills.id', $skill->id),
+                'absences',
+            ]);
+
+        $nameSort = AllowedSort::callback('name', function ($query, bool $desc) {
+            $dir = $desc ? 'desc' : 'asc';
+            $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
+        });
+
+        $paginator = QueryBuilder::for($base, $params->toRequest())
+            ->allowedFilters([
+                AllowedFilter::callback('search', function ($query, $value) {
+                    $query->where(fn($q) => $q
+                        ->where('firstname', 'like', "%{$value}%")
+                        ->orWhere('lastname', 'like', "%{$value}%")
+                        ->orWhere('email', 'like', "%{$value}%"));
+                }),
+            ])
+            ->allowedSorts([$nameSort])
+            ->defaultSort($nameSort)
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
+
+        $paginator->getCollection()->transform(function ($user) use ($today) {
+            $userSkill = $user->skills->first();
+
+            $onLeave = $user->absences->contains(function ($a) use ($today) {
+                return Carbon::parse($a->start_date)->lte($today)
+                    && Carbon::parse($a->end_date)->gte($today);
+            });
+
+            return [
+                'id' => $user->id,
+                'firstname' => $user->firstname,
+                'lastname' => $user->lastname,
+                'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
+                'level' => (int) ($userSkill?->pivot->level ?? 0),
+                'on_leave_today' => $onLeave,
+            ];
+        });
+
+        return $paginator;
+    }
+
+    /**
+     * <summary>
      *  Fragility-alert feed for a project. Derives a prioritized list of decision-support alerts
      *  purely from the knowledge-coverage matrix and the project's cached state — bus factor,
      *  active absences and the skills they expose, knowledge silos, uncovered skills, fragility
@@ -685,7 +972,7 @@ class ProjectService
      */
     public function getProjectFragilityAlerts(Project $project): array
     {
-        $coverage = $this->getProjectKnowledgeCoverage($project);
+        $coverage = $this->knowledgeCoverageMatrix($project);
         $alerts = [];
 
         // Bus factor
