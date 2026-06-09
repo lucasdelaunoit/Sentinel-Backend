@@ -103,7 +103,7 @@ class PlanningSimulationService
                 'absences_evaluated' => count($absences),
                 'month'              => $month,
             ],
-            'overall_level' => $totals['severity'] === 'critical' ? 'critical' : ($totals['severity'] === 'high' ? 'warning' : 'safe'),
+            'overall_severity' => $totals['severity'],
         ];
     }
 
@@ -162,10 +162,10 @@ class PlanningSimulationService
                 array_column($rowAfter['employees'], 'user_id'),
             ));
 
-            $sev = 'safe';
+            $sev = 'ok';
             if ($rowAfter['status'] === 'uncovered') { $uncovered++; $sev = 'critical'; }
             elseif ($rowAfter['status'] === 'siloed') {
-                $siloed++; $sev = 'medium';
+                $siloed++; $sev = 'warning';
                 if ($cBefore > 1 && $cAfter === 1) {
                     $spofs[] = ['skill_id' => $skillId, 'skill_name' => $rowAfter['skill_name'], 'owner_left' => (string) $rowAfter['employees'][0]['user_id']];
                 }
@@ -220,7 +220,7 @@ class PlanningSimulationService
             if (($rowBefore['status'] ?? null) === 'safe') $safeBefore++;
         }
         $reqsBefore = count($matrixBefore);
-        $level     = $uncovered > 0 ? 'critical' : ($siloed > 0 ? 'warning' : 'safe');
+        $severity  = $uncovered > 0 ? 'critical' : ($siloed > 0 ? 'warning' : 'ok');
         $statusAfter = $uncovered > 0 ? 'blocked' : ($siloed > 0 ? 'at_risk' : 'healthy');
         $statusBefore = $reqsBefore > 0 && $safeBefore < $reqsBefore ? 'at_risk' : 'healthy';
 
@@ -257,7 +257,7 @@ class PlanningSimulationService
             'recommendation'                 => $uncovered > 0 && !empty($skillsAtRisk)
                 ? "Cover {$skillsAtRisk[0]['name']} — reassign or upskill"
                 : ($siloed > 0 ? "Cross-train on " . ($skillsAtRisk[0]['name'] ?? 'critical skill') : null),
-            'level'                          => $level,
+            'severity'                       => $severity,
         ];
     }
 
@@ -271,7 +271,7 @@ class PlanningSimulationService
             // Before any absence every aggregated skill has ≥1 owner → covered by construction.
             $covBefore    = 100;
             $covAfter     = $ownersTotal === 0 ? 100 : (int) round(($ownersLeft / $ownersTotal) * 100);
-            $severity     = $ownersLeft === 0 ? 'critical' : ($ownersLeft === 1 ? 'high' : ($ownersLeft <= 2 ? 'medium' : 'low'));
+            $severity     = $ownersLeft === 0 ? 'critical' : ($ownersLeft <= 2 ? 'warning' : 'ok');
             $out[$k] = [
                 'skill_id'             => $row['skill_id'],
                 'name'                 => $row['name'],
@@ -298,9 +298,9 @@ class PlanningSimulationService
         foreach ($usersById as $uid => $user) {
             $stringId = (string) $uid;
             $empProjects = collect($perProject)->filter(fn($p) => $user->projects->contains('id', $p['project_id']))->values();
-            $level = $empProjects->contains(fn($p) => $p['level'] === 'critical')
+            $severity = $empProjects->contains(fn($p) => $p['severity'] === 'critical')
                 ? 'critical'
-                : ($empProjects->contains(fn($p) => $p['level'] === 'warning') ? 'warning' : 'safe');
+                : ($empProjects->contains(fn($p) => $p['severity'] === 'warning') ? 'warning' : 'ok');
 
             $userSkillIds = $user->skills->pluck('id')->all();
             $candidates = $allUsers
@@ -337,7 +337,7 @@ class PlanningSimulationService
 
             $out[$stringId] = [
                 'user_id'                  => $stringId,
-                'level'                    => $level,
+                'severity'                 => $severity,
                 'days_off'                 => $userDays[$stringId] ?? 0,
                 'working_days_in_month'    => $workingDays,
                 'absence_ratio_pct'        => (int) round((($userDays[$stringId] ?? 0) / $workingDays) * 100),
@@ -348,7 +348,7 @@ class PlanningSimulationService
                     'project_id'  => $p['project_id'],
                     'name'        => $p['name'],
                     'role'        => null,
-                    'criticality' => $p['level'] === 'critical' ? 'critical' : ($p['level'] === 'warning' ? 'medium' : 'safe'),
+                    'severity'    => $p['severity'],
                 ])->values()->all(),
                 'replacement_candidates'   => $candidates,
                 'overlap_with_other_sims'  => $overlapHints,
@@ -379,7 +379,7 @@ class PlanningSimulationService
         foreach ($dayMap as $date => $info) {
             $absentCount = count($info['absents']);
             $ratio = $totalUsers === 0 ? 0 : $absentCount / $totalUsers;
-            $sev = $ratio >= 0.4 ? 'critical' : ($ratio >= 0.25 ? 'high' : ($ratio >= 0.15 ? 'medium' : ($ratio > 0 ? 'low' : 'safe')));
+            $sev = $ratio >= 0.4 ? 'critical' : ($ratio >= 0.25 ? 'warning' : 'ok');
             $dow = (int) Carbon::parse($date)->dayOfWeek;
             $out[] = [
                 'date'                     => $date,
@@ -405,7 +405,7 @@ class PlanningSimulationService
         $hotspots = [];
         $run = null;
         foreach ($perDay as $d) {
-            if (in_array($d['severity'], ['high', 'critical'], true)) {
+            if (in_array($d['severity'], ['warning', 'critical'], true)) {
                 if ($run === null) $run = ['start' => $d['date'], 'end' => $d['date'], 'days' => [$d]];
                 else { $run['end'] = $d['date']; $run['days'][] = $d; }
             } elseif ($run !== null) {
@@ -420,14 +420,14 @@ class PlanningSimulationService
     private function finalizeHotspot(array $run, array $perProject): array
     {
         $absentIds = collect($run['days'])->flatMap(fn($d) => $d['absent_user_ids'])->unique()->values()->all();
-        $maxSev = collect($run['days'])->contains(fn($d) => $d['severity'] === 'critical') ? 'critical' : 'high';
+        $maxSev = collect($run['days'])->contains(fn($d) => $d['severity'] === 'critical') ? 'critical' : 'warning';
         return [
             'date_range'         => [$run['start'], $run['end']],
             'reason'             => count($absentIds) . ' absences overlap',
             'absent_user_ids'    => $absentIds,
             'projects_impacted'  => array_values(array_map(
                 fn($p) => $p['project_id'],
-                array_filter($perProject, fn($p) => $p['level'] !== 'safe'),
+                array_filter($perProject, fn($p) => $p['severity'] !== 'ok'),
             )),
             'severity'           => $maxSev,
         ];
@@ -488,11 +488,11 @@ class PlanningSimulationService
             }
         }
         foreach ($shifts as $sh) {
-            $w[] = ['code' => 'BUS_FACTOR_1_CREATED', 'severity' => 'high', 'skill_id' => $sh['skill_id'], 'message' => "{$sh['skill_name']} → bus factor 1"];
+            $w[] = ['code' => 'BUS_FACTOR_1_CREATED', 'severity' => 'warning', 'skill_id' => $sh['skill_id'], 'message' => "{$sh['skill_name']} → bus factor 1"];
         }
         foreach ($perDay as $d) {
             if ($d['absent_count'] >= 4) {
-                $w[] = ['code' => 'PEAK_OVERLAP', 'severity' => 'high', 'date' => $d['date'], 'user_ids' => $d['absent_user_ids'], 'message' => "{$d['absent_count']} absences overlap on {$d['date']}"];
+                $w[] = ['code' => 'PEAK_OVERLAP', 'severity' => 'warning', 'date' => $d['date'], 'user_ids' => $d['absent_user_ids'], 'message' => "{$d['absent_count']} absences overlap on {$d['date']}"];
             }
         }
         return $w;
@@ -504,7 +504,7 @@ class PlanningSimulationService
         $i = 1;
         foreach ($perUser as $u) {
             $top = $u['replacement_candidates'][0] ?? null;
-            if ($u['level'] === 'critical' && $top && $top['skill_match_pct'] >= 70) {
+            if ($u['severity'] === 'critical' && $top && $top['skill_match_pct'] >= 70) {
                 $name = $usersById[(int) $u['user_id']]?->firstname ?? "user {$u['user_id']}";
                 $recs[] = [
                     'id'              => 'r' . $i,
@@ -603,7 +603,7 @@ class PlanningSimulationService
             }
         }
 
-        $projectsAtRisk = count(array_filter($perProject, fn($p) => $p['level'] !== 'safe'));
+        $projectsAtRisk = count(array_filter($perProject, fn($p) => $p['severity'] !== 'ok'));
         $projectsBlocked = count(array_filter($perProject, fn($p) => $p['status_after'] === 'blocked'));
         $criticalSkills = count(array_filter($perSkill, fn($s) => $s['severity'] === 'critical'));
 
@@ -611,7 +611,7 @@ class PlanningSimulationService
         $covAfter  = $orgAgg['cov']['after'];
         $busAfter  = $orgAgg['bus']['after'];
 
-        $severity = $criticalSkills > 0 || $projectsBlocked > 0 ? 'critical' : ($projectsAtRisk > 0 ? 'high' : 'low');
+        $severity = $criticalSkills > 0 || $projectsBlocked > 0 ? 'critical' : ($projectsAtRisk > 0 ? 'warning' : 'ok');
         $totalUsers = max(1, $totalUsers);
 
         return [
@@ -658,7 +658,7 @@ class PlanningSimulationService
                 'org_capacity_loss_pct' => 0,
                 'projects_at_risk_count' => 0, 'projects_blocked_count' => 0,
                 'critical_skills_uncovered_count' => 0,
-                'severity' => 'safe',
+                'severity' => 'ok',
             ],
             'per_user_impact' => (object) [],
             'per_project_impact' => [],
@@ -681,7 +681,7 @@ class PlanningSimulationService
                 'absences_evaluated' => 0,
                 'month' => $month,
             ],
-            'overall_level' => 'safe',
+            'overall_severity' => 'ok',
         ];
     }
 }
