@@ -5,13 +5,17 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ApplyPlanningRequest;
 use App\Http\Requests\SimulatePlanningRequest;
 use App\Services\PlanningService;
+use App\Services\PlanningSimulationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PlanningController extends Controller
 {
-    public function __construct(private readonly PlanningService $service) {}
+    public function __construct(
+        private readonly PlanningService $service,
+        private readonly PlanningSimulationService $simulation,
+    ) {}
 
     /**
      * <summary>
@@ -35,7 +39,7 @@ class PlanningController extends Controller
     public function simulate(SimulatePlanningRequest $request): JsonResponse
     {
         $data = $request->validated();
-        return response()->json($this->service->simulate($data['absences'], $data['month'] ?? null));
+        return response()->json($this->simulation->simulate($data['absences'], $data['month'] ?? null));
     }
 
     /**
