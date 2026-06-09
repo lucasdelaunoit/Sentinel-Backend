@@ -37,9 +37,9 @@ class CalendarService
             $iso        = $day->toDateString();
 
             $status = match (true) {
-                isset($holidaySet[$iso])           => 'holiday',
-                ($workingMask[$weekdayIdx] ?? 0)   => 'working',
-                default                            => 'off',
+                isset($holidaySet[$iso])             => 'holiday',
+                ($workingMask[$weekdayIdx] ?? 0) === 1 => 'working',
+                default                              => 'off',
             };
 
             $days[] = [

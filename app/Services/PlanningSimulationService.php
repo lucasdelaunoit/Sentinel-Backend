@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Metrics\Calculators\BusFactorCalculator;
+use App\Metrics\Calculators\FragilityCalculator;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\Carbon;
@@ -18,16 +20,16 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class PlanningSimulationService
 {
-    /** Org-level baseline metrics the simulation deltas are measured against. */
-    private const BASE_RISK = 42;
-    private const BASE_BUS  = 3;
-    private const BASE_COV  = 78;
-
     /** Memoized inclusive date expansions keyed by "start|end" — same span is expanded many times per simulate. */
     private array $dateCache = [];
 
     public function __construct(
         private readonly SkillCoverageService $coverage,
+        private readonly FragilityCalculator $fragility,
+        private readonly BusFactorCalculator $busFactor,
+        private readonly CalendarService $calendar,
+        private readonly OrganizationSettingService $orgSettings,
+        private readonly CompanyHolidayService $companyHolidays,
     ) {}
 
     public function simulate(array $absences, ?string $month = null): array
@@ -48,8 +50,13 @@ class PlanningSimulationService
             ->keyBy('id');
 
         $allUsers = User::query()->with(['skills'])->get();
-        $totalUsers    = $allUsers->count();
-        $totalProjects = Project::query()->count();
+        $totalUsers = $allUsers->count();
+
+        /* Real working-day count for the simulated month (org calendar + holidays). */
+        [$yearNum, $monthNum] = array_map('intval', explode('-', $month));
+        $setting     = $this->orgSettings->getOrganizationSetting();
+        $holidays    = $this->companyHolidays->getCompanyHolidaysForMonth($yearNum, $monthNum);
+        $workingDays = max(1, $this->calendar->countWorkingDays($yearNum, $monthNum, $setting, $holidays));
 
         /* Affected projects = union of absent users' project rosters */
         $projectIds = $usersById->flatMap(fn(User $u) => $u->projects->pluck('id'))->unique()->values();
@@ -68,14 +75,15 @@ class PlanningSimulationService
         }
 
         $perSkill = $this->buildSkillImpacts($skillAggregator);
-        $perUser  = $this->buildUserImpacts($absences, $usersById, $allUsers, $perProject, $userDays);
+        $perUser  = $this->buildUserImpacts($absences, $usersById, $allUsers, $perProject, $userDays, $workingDays);
         $perDay   = $this->buildDayLoad($absences, $perSkill, $totalUsers);
         $hotspots = $this->buildHotspots($perDay, $perProject);
         $shifts   = $this->buildShifts($perSkill);
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
         $recs      = $this->buildRecommendations($perUser, $perSkill, $hotspots, $usersById);
-        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts, $totalUsers);
+        $orgAgg    = $this->computeOrgAggregates($perProject);
+        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts, $totalUsers, $workingDays, $orgAgg);
 
         return [
             'totals'                     => $totals,
@@ -88,7 +96,7 @@ class PlanningSimulationService
             'cascading_risks'            => $cascading,
             'warnings'                   => $warnings,
             'recommendations'            => $recs,
-            'comparison_vs_baseline'     => $this->buildComparison($totals, $totalProjects),
+            'comparison_vs_baseline'     => $this->buildComparison($totals, $orgAgg),
             'meta' => [
                 'computed_at'        => Carbon::now()->toIso8601String(),
                 'computation_ms'     => (int) round((microtime(true) - $start) * 1000),
@@ -216,13 +224,14 @@ class PlanningSimulationService
         $statusAfter = $uncovered > 0 ? 'blocked' : ($siloed > 0 ? 'at_risk' : 'healthy');
         $statusBefore = $reqsBefore > 0 && $safeBefore < $reqsBefore ? 'at_risk' : 'healthy';
 
-        $busBefore = max(1, (int) ($project->bus_factor ?? 1));
         $teamAbsent = collect($absences)->filter(fn($a) => $project->users->contains('id', (int) $a['user_id']))->count();
-        $busAfter   = max(1, $busBefore - min($teamAbsent, $busBefore - 1));
+        // Real bus factor + fragility from the metrics engine: [] = before (clean state), absent roster = after.
+        $busBefore  = $this->busFactor->computeRawForProject($project, []);
+        $busAfter   = $this->busFactor->computeRawForProject($project, $absentUserIds);
         $covBefore  = $reqsBefore === 0 ? 100 : (int) round(($safeBefore / $reqsBefore) * 100);
         $covAfter   = $totalReqs === 0 ? 100 : (int) round(($safe / $totalReqs) * 100);
-        $riskBefore = (int) ($project->fragility_raw ?? 0);
-        $riskAfter  = min(100, (int) round($riskBefore + $uncovered * 18 + $siloed * 8));
+        $riskBefore = (int) round($this->fragility->computeRawForProject($project, []));
+        $riskAfter  = (int) round($this->fragility->computeRawForProject($project, $absentUserIds));
 
         return [
             'project_id'                     => $project->id,
@@ -241,7 +250,7 @@ class PlanningSimulationService
             'skills_at_risk'                 => $skillsAtRisk,
             'single_points_of_failure_created' => $spofs,
             'milestones_at_risk'             => $statusAfter === 'blocked' && $project->deadline
-                ? [['id' => "{$project->id}-m1", 'name' => 'Deadline', 'date' => $project->deadline->toDateString(), 'confidence_delta_pct' => -25]]
+                ? [['id' => "{$project->id}-m1", 'name' => 'Deadline', 'date' => $project->deadline->toDateString()]]
                 : [],
             'effective_team_size_before'     => $project->users->count(),
             'effective_team_size_after'      => $project->users->count() - $teamAbsent,
@@ -283,7 +292,7 @@ class PlanningSimulationService
         return $out;
     }
 
-    private function buildUserImpacts(array $absences, $usersById, $allUsers, array $perProject, array $userDays): array
+    private function buildUserImpacts(array $absences, $usersById, $allUsers, array $perProject, array $userDays, int $workingDays): array
     {
         $out = [];
         foreach ($usersById as $uid => $user) {
@@ -296,14 +305,14 @@ class PlanningSimulationService
             $userSkillIds = $user->skills->pluck('id')->all();
             $candidates = $allUsers
                 ->filter(fn($u) => $u->id !== $user->id && !isset($usersById[$u->id]))
-                ->map(function ($u) use ($userSkillIds, $userDays, $stringId) {
+                ->map(function ($u) use ($userSkillIds, $userDays, $stringId, $workingDays) {
                     $overlap = count(array_intersect($userSkillIds, $u->skills->pluck('id')->all()));
                     $pct     = empty($userSkillIds) ? 0 : (int) round($overlap / count($userSkillIds) * 100);
                     return [
                         'user_id'         => (string) $u->id,
                         'name'            => trim(($u->firstname ?? '') . ' ' . ($u->lastname ?? '')) ?: $u->email,
                         'skill_match_pct' => $pct,
-                        'available_days'  => max(0, 20 - ($userDays[$stringId] ?? 0)),
+                        'available_days'  => max(0, $workingDays - ($userDays[$stringId] ?? 0)),
                         'cost_signal'     => $pct >= 70 ? 'ok' : ($pct >= 40 ? 'stretch' : 'overloaded'),
                     ];
                 })
@@ -330,10 +339,10 @@ class PlanningSimulationService
                 'user_id'                  => $stringId,
                 'level'                    => $level,
                 'days_off'                 => $userDays[$stringId] ?? 0,
-                'working_days_in_month'    => 20,
-                'absence_ratio_pct'        => (int) round((($userDays[$stringId] ?? 0) / 20) * 100),
+                'working_days_in_month'    => $workingDays,
+                'absence_ratio_pct'        => (int) round((($userDays[$stringId] ?? 0) / $workingDays) * 100),
                 'skills_uncovered'         => $empProjects->flatMap(fn($p) => collect($p['skills_at_risk'])->where('severity', 'critical'))
-                    ->map(fn($s) => ['skill_id' => $s['skill_id'], 'name' => $s['name'], 'level' => 4, 'is_critical' => true, 'owners_left' => $s['owners_left']])
+                    ->map(fn($s) => ['skill_id' => $s['skill_id'], 'name' => $s['name'], 'level' => (int) $s['required_level'], 'is_critical' => true, 'owners_left' => $s['owners_left']])
                     ->values()->all(),
                 'projects_affected'        => $empProjects->map(fn($p) => [
                     'project_id'  => $p['project_id'],
@@ -503,7 +512,6 @@ class PlanningSimulationService
                     'priority'        => $i++,
                     'title'           => "Cover for {$name}",
                     'detail'          => "Assign {$top['name']} ({$top['skill_match_pct']}% skill match) during absence",
-                    'impact_preview'  => ['risk_score_delta' => -12, 'coverage_delta_pct' => 8],
                 ];
             }
         }
@@ -526,19 +534,66 @@ class PlanningSimulationService
                     'priority'        => $i++,
                     'title'           => "Spread absences around {$h['date_range'][0]}",
                     'detail'          => count($h['absent_user_ids']) . " overlapping — shift one absence by 2 days",
-                    'impact_preview'  => ['absent_headcount_peak' => max(1, count($h['absent_user_ids']) - 1)],
                 ];
             }
         }
         return $recs;
     }
 
-    private function buildTotals(array $perProject, array $perSkill, array $perDay, array $shifts, int $totalUsers): array
+    /**
+     * <summary>
+     *  Org-level before/after aggregates from real per-project metrics. Unaffected projects use their
+     *  cached columns (before == after → zero delta); affected projects use the freshly computed
+     *  before/after from per-project impact. Every org delta is therefore driven only by the simulated
+     *  projects. Risk = avg fragility (0-100), bus = avg bus factor, cov = avg coverage %, healthy =
+     *  count of projects with fragility ≤ 60.
+     * </summary>
+     *
+     * @param array $perProject Affected-project impact rows
+     * @return array{risk: array, bus: array, cov: array, healthy: array}
+     */
+    private function computeOrgAggregates(array $perProject): array
     {
-        $baseRisk = self::BASE_RISK;
-        $baseBus  = self::BASE_BUS;
-        $baseCov  = self::BASE_COV;
+        $affected = [];
+        foreach ($perProject as $p) {
+            $affected[$p['project_id']] = $p;
+        }
 
+        $projects = Project::query()->get(['id', 'fragility_raw', 'bus_factor', 'knowledge_coverage_raw']);
+        $n = max(1, $projects->count());
+
+        $riskBefore = $riskAfter = 0.0;
+        $busBefore  = $busAfter  = 0.0;
+        $covBefore  = $covAfter  = 0.0;
+        $healthyBefore = $healthyAfter = 0;
+
+        foreach ($projects as $project) {
+            $p = $affected[$project->id] ?? null;
+
+            $rBefore = $p ? (int) $p['risk_score_before']   : (int) $project->fragility_raw;
+            $rAfter  = $p ? (int) $p['risk_score_after']    : (int) $project->fragility_raw;
+            $bBefore = $p ? (int) $p['bus_factor_before']   : (int) $project->bus_factor;
+            $bAfter  = $p ? (int) $p['bus_factor_after']    : (int) $project->bus_factor;
+            $cBefore = $p ? (int) $p['coverage_pct_before'] : (int) $project->knowledge_coverage_raw;
+            $cAfter  = $p ? (int) $p['coverage_pct_after']  : (int) $project->knowledge_coverage_raw;
+
+            $riskBefore += $rBefore; $riskAfter += $rAfter;
+            $busBefore  += $bBefore; $busAfter  += $bAfter;
+            $covBefore  += $cBefore; $covAfter  += $cAfter;
+            if ($rBefore <= 60) $healthyBefore++;
+            if ($rAfter  <= 60) $healthyAfter++;
+        }
+
+        return [
+            'risk'    => ['before' => (int) round($riskBefore / $n), 'after' => (int) round($riskAfter / $n)],
+            'bus'     => ['before' => (int) round($busBefore / $n),  'after' => (int) round($busAfter / $n)],
+            'cov'     => ['before' => (int) round($covBefore / $n),  'after' => (int) round($covAfter / $n)],
+            'healthy' => ['before' => $healthyBefore, 'after' => $healthyAfter],
+        ];
+    }
+
+    private function buildTotals(array $perProject, array $perSkill, array $perDay, array $shifts, int $totalUsers, int $workingDays, array $orgAgg): array
+    {
         $headcountPeak = ['count' => 0, 'date' => null];
         $fteDays = 0.0;
         foreach ($perDay as $d) {
@@ -552,24 +607,24 @@ class PlanningSimulationService
         $projectsBlocked = count(array_filter($perProject, fn($p) => $p['status_after'] === 'blocked'));
         $criticalSkills = count(array_filter($perSkill, fn($s) => $s['severity'] === 'critical'));
 
-        $riskAfter = min(100, $baseRisk + $projectsAtRisk * 5 + $projectsBlocked * 10 + $criticalSkills * 6);
-        $covAfter  = max(0, $baseCov - $projectsAtRisk * 3 - $criticalSkills * 4);
-        $busAfter  = max(1, $baseBus - count($shifts));
+        $riskAfter = $orgAgg['risk']['after'];
+        $covAfter  = $orgAgg['cov']['after'];
+        $busAfter  = $orgAgg['bus']['after'];
 
         $severity = $criticalSkills > 0 || $projectsBlocked > 0 ? 'critical' : ($projectsAtRisk > 0 ? 'high' : 'low');
         $totalUsers = max(1, $totalUsers);
 
         return [
             'risk_score'                     => $riskAfter,
-            'risk_score_delta'               => $riskAfter - $baseRisk,
+            'risk_score_delta'               => $riskAfter - $orgAgg['risk']['before'],
             'bus_factor'                     => $busAfter,
-            'bus_factor_delta'               => $busAfter - $baseBus,
+            'bus_factor_delta'               => $busAfter - $orgAgg['bus']['before'],
             'coverage_pct'                   => $covAfter,
-            'coverage_delta_pct'             => $covAfter - $baseCov,
+            'coverage_delta_pct'             => $covAfter - $orgAgg['cov']['before'],
             'absent_fte_days'                => round($fteDays, 1),
             'absent_headcount_peak'          => $headcountPeak['count'],
             'absent_headcount_peak_date'     => $headcountPeak['date'],
-            'org_capacity_loss_pct'          => (int) round(($fteDays / ($totalUsers * 20)) * 100),
+            'org_capacity_loss_pct'          => (int) round(($fteDays / ($totalUsers * $workingDays)) * 100),
             'projects_at_risk_count'         => $projectsAtRisk,
             'projects_blocked_count'         => $projectsBlocked,
             'critical_skills_uncovered_count' => $criticalSkills,
@@ -577,25 +632,28 @@ class PlanningSimulationService
         ];
     }
 
-    private function buildComparison(array $totals, int $totalProjects): array
+    private function buildComparison(array $totals, array $orgAgg): array
     {
-        $baseRisk = self::BASE_RISK; $baseBus = self::BASE_BUS; $baseCov = self::BASE_COV;
+        $riskBefore = $orgAgg['risk']['before'];
         return [
-            'risk_score'             => ['before' => $baseRisk, 'after' => $totals['risk_score'], 'delta_pct' => $baseRisk === 0 ? 0 : (int) round((($totals['risk_score'] - $baseRisk) / $baseRisk) * 100)],
-            'bus_factor'             => ['before' => $baseBus, 'after' => $totals['bus_factor']],
-            'coverage_pct'           => ['before' => $baseCov, 'after' => $totals['coverage_pct']],
-            'projects_healthy_count' => ['before' => $totalProjects, 'after' => $totalProjects - $totals['projects_blocked_count']],
+            'risk_score'             => ['before' => $riskBefore, 'after' => $totals['risk_score'], 'delta_pct' => $riskBefore === 0 ? 0 : (int) round((($totals['risk_score'] - $riskBefore) / $riskBefore) * 100)],
+            'bus_factor'             => ['before' => $orgAgg['bus']['before'], 'after' => $totals['bus_factor']],
+            'coverage_pct'           => ['before' => $orgAgg['cov']['before'], 'after' => $totals['coverage_pct']],
+            'projects_healthy_count' => ['before' => $orgAgg['healthy']['before'], 'after' => $orgAgg['healthy']['after']],
         ];
     }
 
     private function emptyResponse(string $month, float $startMicro): array
     {
-        $baseRisk = self::BASE_RISK; $baseBus = self::BASE_BUS; $baseCov = self::BASE_COV;
+        $orgAgg = $this->computeOrgAggregates([]);
+        $risk = $orgAgg['risk']['before'];
+        $bus  = $orgAgg['bus']['before'];
+        $cov  = $orgAgg['cov']['before'];
         return [
             'totals' => [
-                'risk_score' => $baseRisk, 'risk_score_delta' => 0,
-                'bus_factor' => $baseBus, 'bus_factor_delta' => 0,
-                'coverage_pct' => $baseCov, 'coverage_delta_pct' => 0,
+                'risk_score' => $risk, 'risk_score_delta' => 0,
+                'bus_factor' => $bus, 'bus_factor_delta' => 0,
+                'coverage_pct' => $cov, 'coverage_delta_pct' => 0,
                 'absent_fte_days' => 0, 'absent_headcount_peak' => 0, 'absent_headcount_peak_date' => null,
                 'org_capacity_loss_pct' => 0,
                 'projects_at_risk_count' => 0, 'projects_blocked_count' => 0,
@@ -612,10 +670,10 @@ class PlanningSimulationService
             'warnings' => [],
             'recommendations' => [],
             'comparison_vs_baseline' => [
-                'risk_score' => ['before' => $baseRisk, 'after' => $baseRisk, 'delta_pct' => 0],
-                'bus_factor' => ['before' => $baseBus, 'after' => $baseBus],
-                'coverage_pct' => ['before' => $baseCov, 'after' => $baseCov],
-                'projects_healthy_count' => ['before' => 0, 'after' => 0],
+                'risk_score' => ['before' => $risk, 'after' => $risk, 'delta_pct' => 0],
+                'bus_factor' => ['before' => $bus, 'after' => $bus],
+                'coverage_pct' => ['before' => $cov, 'after' => $cov],
+                'projects_healthy_count' => ['before' => $orgAgg['healthy']['before'], 'after' => $orgAgg['healthy']['before']],
             ],
             'meta' => [
                 'computed_at' => Carbon::now()->toIso8601String(),
