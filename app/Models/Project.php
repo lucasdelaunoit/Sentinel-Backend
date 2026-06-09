@@ -72,11 +72,6 @@ class Project extends Model
             ->withTimestamps();
     }
 
-    public function simulations(): HasMany
-    {
-        return $this->hasMany(Simulation::class);
-    }
-
     /**
      * <summary>
      *  Scope to projects in Active lifecycle state — started, not paused/completed/archived.

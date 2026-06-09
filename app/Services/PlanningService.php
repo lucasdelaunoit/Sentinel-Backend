@@ -20,9 +20,16 @@ use Illuminate\Support\Facades\DB;
  */
 class PlanningService
 {
+    /** Org-level baseline metrics the simulation deltas are measured against. */
+    private const BASE_RISK = 42;
+    private const BASE_BUS  = 3;
+    private const BASE_COV  = 78;
+
+    /** Memoized inclusive date expansions keyed by "start|end" — same span is expanded many times per simulate. */
+    private array $dateCache = [];
+
     public function __construct(
         private readonly SkillCoverageService $coverage,
-        private readonly OrganizationSettingService $orgSettings,
     ) {}
 
     /* ─────────────────────── Month payload ─────────────────────── */
@@ -128,6 +135,8 @@ class PlanningService
             ->keyBy('id');
 
         $allUsers = User::query()->with(['skills'])->get();
+        $totalUsers    = $allUsers->count();
+        $totalProjects = Project::query()->count();
 
         /* Affected projects = union of absent users' project rosters */
         $projectIds = $usersById->flatMap(fn(User $u) => $u->projects->pluck('id'))->unique()->values();
@@ -147,13 +156,13 @@ class PlanningService
 
         $perSkill = $this->buildSkillImpacts($skillAggregator);
         $perUser  = $this->buildUserImpacts($absences, $usersById, $allUsers, $perProject, $userDays);
-        $perDay   = $this->buildDayLoad($absences, $perSkill, $allUsers->count());
+        $perDay   = $this->buildDayLoad($absences, $perSkill, $totalUsers);
         $hotspots = $this->buildHotspots($perDay, $perProject);
         $shifts   = $this->buildShifts($perSkill);
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
         $recs      = $this->buildRecommendations($perUser, $perSkill, $hotspots, $usersById);
-        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts);
+        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts, $totalUsers);
 
         return [
             'totals'                     => $totals,
@@ -166,7 +175,7 @@ class PlanningService
             'cascading_risks'            => $cascading,
             'warnings'                   => $warnings,
             'recommendations'            => $recs,
-            'comparison_vs_baseline'     => $this->buildComparison($totals),
+            'comparison_vs_baseline'     => $this->buildComparison($totals, $totalProjects),
             'meta' => [
                 'computed_at'        => Carbon::now()->toIso8601String(),
                 'computation_ms'     => (int) round((microtime(true) - $start) * 1000),
@@ -174,7 +183,6 @@ class PlanningService
                 'month'              => $month,
             ],
             'overall_level' => $totals['severity'] === 'critical' ? 'critical' : ($totals['severity'] === 'high' ? 'warning' : 'safe'),
-            'projects'      => $perProject,
         ];
     }
 
@@ -195,13 +203,16 @@ class PlanningService
 
     private function eachDate(string $start, string $end): array
     {
+        $key = $start . '|' . $end;
+        if (isset($this->dateCache[$key])) return $this->dateCache[$key];
+
         $out = [];
         $s = Carbon::parse($start);
         $e = Carbon::parse($end);
         for ($d = $s->copy(); $d->lte($e); $d->addDay()) {
             $out[] = $d->toDateString();
         }
-        return $out;
+        return $this->dateCache[$key] = $out;
     }
 
     private function halfDuration(array $a): float
@@ -296,14 +307,19 @@ class PlanningService
         }
 
         $totalReqs = $uncovered + $siloed + $safe;
+        $safeBefore = 0;
+        foreach ($matrixBefore as $rowBefore) {
+            if (($rowBefore['status'] ?? null) === 'safe') $safeBefore++;
+        }
+        $reqsBefore = count($matrixBefore);
         $level     = $uncovered > 0 ? 'critical' : ($siloed > 0 ? 'warning' : 'safe');
         $statusAfter = $uncovered > 0 ? 'blocked' : ($siloed > 0 ? 'at_risk' : 'healthy');
-        $statusBefore = 'healthy';
+        $statusBefore = $reqsBefore > 0 && $safeBefore < $reqsBefore ? 'at_risk' : 'healthy';
 
         $busBefore = max(1, (int) ($project->bus_factor ?? 1));
         $teamAbsent = collect($absences)->filter(fn($a) => $project->users->contains('id', (int) $a['user_id']))->count();
         $busAfter   = max(1, $busBefore - min($teamAbsent, $busBefore - 1));
-        $covBefore  = $totalReqs === 0 ? 100 : 100;
+        $covBefore  = $reqsBefore === 0 ? 100 : (int) round(($safeBefore / $reqsBefore) * 100);
         $covAfter   = $totalReqs === 0 ? 100 : (int) round(($safe / $totalReqs) * 100);
         $riskBefore = (int) ($project->fragility_raw ?? 0);
         $riskAfter  = min(100, (int) round($riskBefore + $uncovered * 18 + $siloed * 8));
@@ -343,7 +359,8 @@ class PlanningService
             $ownersTotal  = count($row['owners_total']);
             $ownersAbsent = count($row['owners_absent']);
             $ownersLeft   = max(0, $ownersTotal - $ownersAbsent);
-            $covBefore    = $ownersTotal === 0 ? 100 : 100;
+            // Before any absence every aggregated skill has ≥1 owner → covered by construction.
+            $covBefore    = 100;
             $covAfter     = $ownersTotal === 0 ? 100 : (int) round(($ownersLeft / $ownersTotal) * 100);
             $severity     = $ownersLeft === 0 ? 'critical' : ($ownersLeft === 1 ? 'high' : ($ownersLeft <= 2 ? 'medium' : 'low'));
             $out[$k] = [
@@ -616,12 +633,11 @@ class PlanningService
         return $recs;
     }
 
-    private function buildTotals(array $perProject, array $perSkill, array $perDay, array $shifts): array
+    private function buildTotals(array $perProject, array $perSkill, array $perDay, array $shifts, int $totalUsers): array
     {
-        $settings = $this->orgSettings->getOrganizationSetting();
-        $baseRisk = 42;
-        $baseBus  = 3;
-        $baseCov  = 78;
+        $baseRisk = self::BASE_RISK;
+        $baseBus  = self::BASE_BUS;
+        $baseCov  = self::BASE_COV;
 
         $headcountPeak = ['count' => 0, 'date' => null];
         $fteDays = 0.0;
@@ -641,7 +657,7 @@ class PlanningService
         $busAfter  = max(1, $baseBus - count($shifts));
 
         $severity = $criticalSkills > 0 || $projectsBlocked > 0 ? 'critical' : ($projectsAtRisk > 0 ? 'high' : 'low');
-        $totalUsers = max(1, User::query()->count());
+        $totalUsers = max(1, $totalUsers);
 
         return [
             'risk_score'                     => $riskAfter,
@@ -661,20 +677,20 @@ class PlanningService
         ];
     }
 
-    private function buildComparison(array $totals): array
+    private function buildComparison(array $totals, int $totalProjects): array
     {
-        $baseRisk = 42; $baseBus = 3; $baseCov = 78;
+        $baseRisk = self::BASE_RISK; $baseBus = self::BASE_BUS; $baseCov = self::BASE_COV;
         return [
             'risk_score'             => ['before' => $baseRisk, 'after' => $totals['risk_score'], 'delta_pct' => $baseRisk === 0 ? 0 : (int) round((($totals['risk_score'] - $baseRisk) / $baseRisk) * 100)],
             'bus_factor'             => ['before' => $baseBus, 'after' => $totals['bus_factor']],
             'coverage_pct'           => ['before' => $baseCov, 'after' => $totals['coverage_pct']],
-            'projects_healthy_count' => ['before' => Project::query()->count(), 'after' => Project::query()->count() - $totals['projects_blocked_count']],
+            'projects_healthy_count' => ['before' => $totalProjects, 'after' => $totalProjects - $totals['projects_blocked_count']],
         ];
     }
 
     private function emptyResponse(string $month, float $startMicro): array
     {
-        $baseRisk = 42; $baseBus = 3; $baseCov = 78;
+        $baseRisk = self::BASE_RISK; $baseBus = self::BASE_BUS; $baseCov = self::BASE_COV;
         return [
             'totals' => [
                 'risk_score' => $baseRisk, 'risk_score_delta' => 0,
@@ -708,7 +724,6 @@ class PlanningService
                 'month' => $month,
             ],
             'overall_level' => 'safe',
-            'projects' => [],
         ];
     }
 }

@@ -11,10 +11,4 @@ enum AbsenceHalf: string
 {
     case Morning = 'morning';
     case Afternoon = 'afternoon';
-
-    /** Ordering rank within a day: morning before afternoon. */
-    public function rank(): int
-    {
-        return $this === self::Afternoon ? 1 : 0;
-    }
 }

@@ -78,9 +78,4 @@ class User extends Authenticatable
         return $this->hasMany(Absence::class);
     }
 
-    public function simulations(): BelongsToMany
-    {
-        return $this->belongsToMany(Simulation::class, 'simulation_absences')
-            ->withTimestamps();
-    }
 }

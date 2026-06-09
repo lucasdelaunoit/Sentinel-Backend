@@ -6,7 +6,6 @@ use App\Jobs\RecalculateProjectRiskJob;
 use App\Jobs\RefreshRuleViolationsJob;
 use App\Models\Project;
 use App\Models\Rule;
-use App\Models\Simulation;
 use App\Services\RuleEvaluator;
 use App\Services\RuleService;
 use App\Support\QueryParams;
@@ -141,16 +140,4 @@ class RuleManager
         return $violations;
     }
 
-    /**
-     * <summary>
-     *  Evaluate every enabled rule against a simulation roster. Pure compute — no caching.
-     * </summary>
-     *
-     * @param Simulation $simulation Target simulation
-     * @return array Violations
-     */
-    public function evaluateSimulation(Simulation $simulation): array
-    {
-        return $this->ruleEvaluator->evaluateSimulation($simulation);
-    }
 }

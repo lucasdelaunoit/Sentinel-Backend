@@ -10,7 +10,6 @@ use App\Http\Controllers\OrganizationSettingController;
 use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RuleController;
-use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SkillCategoryController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\UserController;
@@ -104,9 +103,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/users/{user}/absences', [AbsenceController::class, 'getAgileAbsencesForUser']);
     Route::post('/users/{user}/absences', [AbsenceController::class, 'createAbsenceForUser']);
 
-    // Simulations
-    Route::apiResource('simulations', SimulationController::class)->except(['update']);
-
     /** ---------------------- [ PLANNING ] ---------------------- */
     Route::get('/planning', [PlanningController::class, 'index']);
     Route::post('/planning/simulate', [PlanningController::class, 'simulate']);
@@ -137,7 +133,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
         /* ----------------- RULES ----------------- */
         Route::get('/rules/violations', [RuleController::class, 'getRuleViolations']);
-        Route::get('/rules/simulations/{simulation}/violations', [RuleController::class, 'evaluateSimulationRules']);
         Route::get('/rules', [RuleController::class, 'getAgileRules']);
         Route::post('/rules', [RuleController::class, 'createRule']);
         Route::patch('/rules/{rule}', [RuleController::class, 'updateRule']);

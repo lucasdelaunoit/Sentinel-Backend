@@ -643,24 +643,6 @@ class ProjectService
 
     /**
      * <summary>
-     *  Full (unpaginated) knowledge-coverage matrix: one row per required skill with its COMPLETE
-     *  holder list. Backs server-side consumers that reason over the whole matrix (e.g. fragility
-     *  alerts), where pagination and the 5-holder cap of the list endpoint would be incorrect.
-     * </summary>
-     *
-     * @param Project $project Target project
-     * @return array<int, array{
-     *     skill: array{id:int, name:string, category:?string},
-     *     required_level: int,
-     *     max_level: int,
-     *     active_holders_count: int,
-     *     team_size: int,
-     *     status: string,
-     *     holders: array<int, array{id:int, firstname:?string, lastname:?string, status:string, level:int, on_leave_today:bool}>
-     * }>
-     */
-    /**
-     * <summary>
      *  Public access to the full (unpaginated) knowledge-coverage matrix with complete holder lists.
      *  For dashboard cards that aggregate across every required skill (today snapshot, current absence
      *  impact), where the paginated list endpoint and its 5-holder cap would be incorrect.

@@ -7,7 +7,6 @@ use App\Enums\RuleType;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Models\Project;
 use App\Models\Rule;
-use App\Models\Simulation;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -33,29 +32,6 @@ class RuleEvaluator
 
         foreach ($this->ruleService->getEnabledRules() as $rule) {
             foreach ($this->evaluateRule($rule, []) as $v) {
-                $violations[] = $v;
-            }
-        }
-
-        return $violations;
-    }
-
-    /**
-     * <summary>
-     *  Evaluate every enabled rule against a simulated absence roster.
-     *  $absentUserIds is the set of users virtually removed for the simulation.
-     * </summary>
-     *
-     * @param Simulation $simulation Target simulation
-     * @return array<int, array>
-     */
-    public function evaluateSimulation(Simulation $simulation): array
-    {
-        $absentUserIds = $simulation->absentUsers()->pluck('users.id')->all();
-        $violations    = [];
-
-        foreach ($this->ruleService->getEnabledRules() as $rule) {
-            foreach ($this->evaluateRule($rule, $absentUserIds) as $v) {
                 $violations[] = $v;
             }
         }

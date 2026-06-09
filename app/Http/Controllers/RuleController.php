@@ -7,7 +7,6 @@ use App\Http\Requests\UpdateRuleRequest;
 use App\Http\Resources\RuleResource;
 use App\Managers\RuleManager;
 use App\Models\Rule;
-use App\Models\Simulation;
 use App\Support\QueryParams;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -95,17 +94,4 @@ class RuleController extends Controller
         return response()->json(['data' => $violations]);
     }
 
-    /**
-     * <summary>
-     *  Evaluate every enabled rule against a Simulation roster.
-     * </summary>
-     */
-    public function evaluateSimulationRules(Simulation $simulation): JsonResponse
-    {
-        // Act (Manager)
-        $violations = $this->ruleManager->evaluateSimulation($simulation);
-
-        // Return (Controller)
-        return response()->json(['data' => $violations]);
-    }
 }
