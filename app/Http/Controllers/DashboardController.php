@@ -65,20 +65,4 @@ class DashboardController extends Controller
         // Return (Controller)
         return response()->json($payload);
     }
-
-    // TODO : Maybe later
-    public function projectsAtRiskDetail(): JsonResponse
-    {
-        return response()->json([], 200);
-    }
-
-    public function teamAvailabilityDetail(): JsonResponse
-    {
-        return response()->json([], 200);
-    }
-
-    public function absenceImpactDetail(): JsonResponse
-    {
-        return response()->json([], 200);
-    }
 }

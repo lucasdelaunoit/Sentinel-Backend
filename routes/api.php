@@ -30,9 +30,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'getDashboardStats']);
     Route::get('/dashboard/knowledge-coverage', [DashboardController::class, 'getKnowledgeCoverage']);
     Route::get('/dashboard/upcoming-risk-events', [DashboardController::class, 'getUpcomingRiskEvents']);
-    Route::get('/dashboard/stats/projects-at-risk', [DashboardController::class, 'projectsAtRiskDetail']);
-    Route::get('/dashboard/stats/team-availability', [DashboardController::class, 'teamAvailabilityDetail']);
-    Route::get('/dashboard/stats/absence-impact', [DashboardController::class, 'absenceImpactDetail']);
 
     /** ---------------------- [ PROJECTS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
