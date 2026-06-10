@@ -80,7 +80,7 @@ class PlanningSimulationService
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
         $orgAgg    = $this->computeOrgAggregates($perProject);
-        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $totalUsers, $workingDays, $orgAgg);
+        $totals    = $this->buildTotals($perProject, $perSkill, $perDay);
 
         return [
             'totals'                 => $totals,
@@ -91,7 +91,7 @@ class PlanningSimulationService
             'hotspots'               => $hotspots,
             'cascading_risks'        => $cascading,
             'warnings'               => $warnings,
-            'comparison_vs_baseline' => $this->buildComparison($totals, $orgAgg),
+            'comparison_vs_baseline' => $this->buildComparison($orgAgg),
         ];
     }
 
@@ -501,53 +501,39 @@ class PlanningSimulationService
         ];
     }
 
-    private function buildTotals(array $perProject, array $perSkill, array $perDay, int $totalUsers, int $workingDays, array $orgAgg): array
+    /**
+     * Scenario-scalar headline: worst-case severity + peak overlap. The before/after metric
+     * pairs (risk / bus / coverage) live solely in comparison_vs_baseline — not duplicated here.
+     */
+    private function buildTotals(array $perProject, array $perSkill, array $perDay): array
     {
         $headcountPeak = ['count' => 0, 'date' => null];
-        $fteDays = 0.0;
         foreach ($perDay as $d) {
-            $fteDays += $d['absent_fte'];
             if ($d['absent_count'] > $headcountPeak['count']) {
                 $headcountPeak = ['count' => $d['absent_count'], 'date' => $d['date']];
             }
         }
 
-        $projectsAtRisk = count(array_filter($perProject, fn($p) => $p['severity'] !== 'ok'));
+        $projectsAtRisk  = count(array_filter($perProject, fn($p) => $p['severity'] !== 'ok'));
         $projectsBlocked = count(array_filter($perProject, fn($p) => $p['status_after'] === 'blocked'));
-        $criticalSkills = count(array_filter($perSkill, fn($s) => $s['severity'] === 'critical'));
-
-        $riskAfter = $orgAgg['risk']['after'];
-        $covAfter  = $orgAgg['cov']['after'];
-        $busAfter  = $orgAgg['bus']['after'];
-
+        $criticalSkills  = count(array_filter($perSkill, fn($s) => $s['severity'] === 'critical'));
         $severity = $criticalSkills > 0 || $projectsBlocked > 0 ? 'critical' : ($projectsAtRisk > 0 ? 'warning' : 'ok');
-        $totalUsers = max(1, $totalUsers);
 
         return [
-            'risk_score'                     => $riskAfter,
-            'risk_score_delta'               => $riskAfter - $orgAgg['risk']['before'],
-            'bus_factor'                     => $busAfter,
-            'bus_factor_delta'               => $busAfter - $orgAgg['bus']['before'],
-            'coverage_pct'                   => $covAfter,
-            'coverage_delta_pct'             => $covAfter - $orgAgg['cov']['before'],
-            'absent_fte_days'                => round($fteDays, 1),
-            'absent_headcount_peak'          => $headcountPeak['count'],
-            'absent_headcount_peak_date'     => $headcountPeak['date'],
-            'org_capacity_loss_pct'          => (int) round(($fteDays / ($totalUsers * $workingDays)) * 100),
-            'projects_at_risk_count'         => $projectsAtRisk,
-            'projects_blocked_count'         => $projectsBlocked,
-            'critical_skills_uncovered_count' => $criticalSkills,
-            'severity'                       => $severity,
+            'absent_headcount_peak'      => $headcountPeak['count'],
+            'absent_headcount_peak_date' => $headcountPeak['date'],
+            'severity'                   => $severity,
         ];
     }
 
-    private function buildComparison(array $totals, array $orgAgg): array
+    private function buildComparison(array $orgAgg): array
     {
         $riskBefore = $orgAgg['risk']['before'];
+        $riskAfter  = $orgAgg['risk']['after'];
         return [
-            'risk_score'             => ['before' => $riskBefore, 'after' => $totals['risk_score'], 'delta_pct' => $riskBefore === 0 ? 0 : (int) round((($totals['risk_score'] - $riskBefore) / $riskBefore) * 100)],
-            'bus_factor'             => ['before' => $orgAgg['bus']['before'], 'after' => $totals['bus_factor']],
-            'coverage_pct'           => ['before' => $orgAgg['cov']['before'], 'after' => $totals['coverage_pct']],
+            'risk_score'             => ['before' => $riskBefore, 'after' => $riskAfter, 'delta_pct' => $riskBefore === 0 ? 0 : (int) round((($riskAfter - $riskBefore) / $riskBefore) * 100)],
+            'bus_factor'             => ['before' => $orgAgg['bus']['before'], 'after' => $orgAgg['bus']['after']],
+            'coverage_pct'           => ['before' => $orgAgg['cov']['before'], 'after' => $orgAgg['cov']['after']],
             'projects_healthy_count' => ['before' => $orgAgg['healthy']['before'], 'after' => $orgAgg['healthy']['after']],
         ];
     }
@@ -560,13 +546,8 @@ class PlanningSimulationService
         $cov  = $orgAgg['cov']['before'];
         return [
             'totals' => [
-                'risk_score' => $risk, 'risk_score_delta' => 0,
-                'bus_factor' => $bus, 'bus_factor_delta' => 0,
-                'coverage_pct' => $cov, 'coverage_delta_pct' => 0,
-                'absent_fte_days' => 0, 'absent_headcount_peak' => 0, 'absent_headcount_peak_date' => null,
-                'org_capacity_loss_pct' => 0,
-                'projects_at_risk_count' => 0, 'projects_blocked_count' => 0,
-                'critical_skills_uncovered_count' => 0,
+                'absent_headcount_peak' => 0,
+                'absent_headcount_peak_date' => null,
                 'severity' => 'ok',
             ],
             'per_user_impact' => (object) [],
