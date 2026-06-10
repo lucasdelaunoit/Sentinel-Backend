@@ -34,12 +34,10 @@ class PlanningSimulationService
 
     public function simulate(array $absences, ?string $month = null): array
     {
-        $start = microtime(true);
-
         $month ??= !empty($absences) ? substr($absences[0]['start_date'], 0, 7) : Carbon::now()->format('Y-m');
 
         if (empty($absences)) {
-            return $this->emptyResponse($month, $start);
+            return $this->emptyResponse($month);
         }
 
         $absentUserIds = collect($absences)->pluck('user_id')->map(fn($v) => (int) $v)->unique()->values()->all();
@@ -82,26 +80,18 @@ class PlanningSimulationService
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
         $orgAgg    = $this->computeOrgAggregates($perProject);
-        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts, $totalUsers, $workingDays, $orgAgg);
+        $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $totalUsers, $workingDays, $orgAgg);
 
         return [
-            'totals'                     => $totals,
-            'per_user_impact'            => $perUser,
-            'per_project_impact'         => $perProject,
-            'per_skill_impact'           => array_values($perSkill),
-            'per_day_load'               => $perDay,
-            'hotspots'                   => $hotspots,
-            'skill_concentration_shifts' => $shifts,
-            'cascading_risks'            => $cascading,
-            'warnings'                   => $warnings,
-            'comparison_vs_baseline'     => $this->buildComparison($totals, $orgAgg),
-            'meta' => [
-                'computed_at'        => Carbon::now()->toIso8601String(),
-                'computation_ms'     => (int) round((microtime(true) - $start) * 1000),
-                'absences_evaluated' => count($absences),
-                'month'              => $month,
-            ],
-            'overall_severity' => $totals['severity'],
+            'totals'                 => $totals,
+            'per_user_impact'        => $perUser,
+            'per_project_impact'     => $perProject,
+            'per_skill_impact'       => array_values($perSkill),
+            'per_day_load'           => $perDay,
+            'hotspots'               => $hotspots,
+            'cascading_risks'        => $cascading,
+            'warnings'               => $warnings,
+            'comparison_vs_baseline' => $this->buildComparison($totals, $orgAgg),
         ];
     }
 
@@ -149,7 +139,6 @@ class PlanningSimulationService
         $siloed    = 0;
         $safe      = 0;
         $skillsAtRisk = [];
-        $spofs        = [];
 
         foreach ($matrixAfter as $skillId => $rowAfter) {
             $rowBefore = $matrixBefore[$skillId] ?? $rowAfter;
@@ -162,12 +151,8 @@ class PlanningSimulationService
 
             $sev = 'ok';
             if ($rowAfter['status'] === 'uncovered') { $uncovered++; $sev = 'critical'; }
-            elseif ($rowAfter['status'] === 'siloed') {
-                $siloed++; $sev = 'warning';
-                if ($cBefore > 1 && $cAfter === 1) {
-                    $spofs[] = ['skill_id' => $skillId, 'skill_name' => $rowAfter['skill_name'], 'owner_left' => (string) $rowAfter['employees'][0]['user_id']];
-                }
-            } else $safe++;
+            elseif ($rowAfter['status'] === 'siloed') { $siloed++; $sev = 'warning'; }
+            else $safe++;
 
             if ($cBefore !== $cAfter) {
                 $datesAffected = collect($absences)
@@ -180,9 +165,7 @@ class PlanningSimulationService
                     'name'            => $rowAfter['skill_name'],
                     'required_level'  => $rowAfter['required_level'],
                     'owners_left'     => $cAfter,
-                    'owners_lost'     => array_map('strval', $lost),
                     'severity'        => $sev,
-                    'dates_affected'  => $datesAffected,
                 ];
 
                 $key = $skillId;
@@ -220,21 +203,20 @@ class PlanningSimulationService
         $reqsBefore = count($matrixBefore);
         $severity  = $uncovered > 0 ? 'critical' : ($siloed > 0 ? 'warning' : 'ok');
         $statusAfter = $uncovered > 0 ? 'blocked' : ($siloed > 0 ? 'at_risk' : 'healthy');
-        $statusBefore = $reqsBefore > 0 && $safeBefore < $reqsBefore ? 'at_risk' : 'healthy';
 
-        $teamAbsent = collect($absences)->filter(fn($a) => $project->users->contains('id', (int) $a['user_id']))->count();
-        // Real bus factor + fragility from the metrics engine: [] = before (clean state), absent roster = after.
-        $busBefore  = $this->busFactor->computeRawForProject($project, []);
+        // Before = clean state. computeRawForProject($project, []) is identical to the persisted
+        // metric columns (forProject([]) wrote them), so read the cached column instead of recomputing.
+        // After = recompute live with the simulated absent roster.
+        $busBefore  = (int) $project->bus_factor;
         $busAfter   = $this->busFactor->computeRawForProject($project, $absentUserIds);
         $covBefore  = $reqsBefore === 0 ? 100 : (int) round(($safeBefore / $reqsBefore) * 100);
         $covAfter   = $totalReqs === 0 ? 100 : (int) round(($safe / $totalReqs) * 100);
-        $riskBefore = (int) round($this->fragility->computeRawForProject($project, []));
+        $riskBefore = (int) round((float) $project->fragility_raw);
         $riskAfter  = (int) round($this->fragility->computeRawForProject($project, $absentUserIds));
 
         return [
             'project_id'                     => $project->id,
             'name'                           => $project->name,
-            'status_before'                  => $statusBefore,
             'status_after'                   => $statusAfter,
             'bus_factor_before'              => $busBefore,
             'bus_factor_after'               => $busAfter,
@@ -244,17 +226,7 @@ class PlanningSimulationService
             'coverage_delta_pct'             => $covAfter - $covBefore,
             'risk_score_before'              => $riskBefore,
             'risk_score_after'               => $riskAfter,
-            'risk_delta'                     => $riskAfter - $riskBefore,
             'skills_at_risk'                 => $skillsAtRisk,
-            'single_points_of_failure_created' => $spofs,
-            'milestones_at_risk'             => $statusAfter === 'blocked' && $project->deadline
-                ? [['id' => "{$project->id}-m1", 'name' => 'Deadline', 'date' => $project->deadline->toDateString()]]
-                : [],
-            'effective_team_size_before'     => $project->users->count(),
-            'effective_team_size_after'      => $project->users->count() - $teamAbsent,
-            'recommendation'                 => $uncovered > 0 && !empty($skillsAtRisk)
-                ? "Cover {$skillsAtRisk[0]['name']} — reassign or upskill"
-                : ($siloed > 0 ? "Cross-train on " . ($skillsAtRisk[0]['name'] ?? 'critical skill') : null),
             'severity'                       => $severity,
         ];
     }
@@ -280,8 +252,6 @@ class PlanningSimulationService
                 'owners_left'          => $ownersLeft,
                 'coverage_pct_before'  => $covBefore,
                 'coverage_pct_after'   => $covAfter,
-                'redundancy_before'    => max(0, $ownersTotal - 1),
-                'redundancy_after'     => max(0, $ownersLeft - 1),
                 'dates_uncovered'      => array_keys($row['dates_uncovered']),
                 'projects_impacted'    => array_map('intval', array_keys($row['projects'])),
                 'severity'             => $severity,
@@ -319,26 +289,10 @@ class PlanningSimulationService
                 ->values()
                 ->all();
 
-            $myDates = collect($absences)
-                ->filter(fn($a) => (string) $a['user_id'] === $stringId)
-                ->flatMap(fn($a) => $this->eachDate($a['start_date'], $a['end_date']))
-                ->unique()->values()->all();
-            $overlapHints = collect($absences)
-                ->filter(fn($a) => (string) $a['user_id'] !== $stringId)
-                ->groupBy('user_id')
-                ->map(function ($group, $otherId) use ($myDates) {
-                    $dates = collect($group)->flatMap(fn($a) => $this->eachDate($a['start_date'], $a['end_date']))
-                        ->intersect($myDates)->unique()->values()->all();
-                    return $dates ? ['user_id' => (string) $otherId, 'dates' => $dates] : null;
-                })
-                ->filter()->values()->all();
-
             $out[$stringId] = [
                 'user_id'                  => $stringId,
                 'severity'                 => $severity,
                 'days_off'                 => $userDays[$stringId] ?? 0,
-                'working_days_in_month'    => $workingDays,
-                'absence_ratio_pct'        => (int) round((($userDays[$stringId] ?? 0) / $workingDays) * 100),
                 'skills_uncovered'         => $empProjects->flatMap(fn($p) => collect($p['skills_at_risk'])->where('severity', 'critical'))
                     ->map(fn($s) => ['skill_id' => $s['skill_id'], 'name' => $s['name'], 'level' => (int) $s['required_level'], 'is_critical' => true, 'owners_left' => $s['owners_left']])
                     ->values()->all(),
@@ -349,7 +303,6 @@ class PlanningSimulationService
                     'severity'    => $p['severity'],
                 ])->values()->all(),
                 'replacement_candidates'   => $candidates,
-                'overlap_with_other_sims'  => $overlapHints,
                 'is_critical_employee'     => (int) ($user->criticality_raw ?? 0) >= 70,
                 'bus_factor_contribution'  => (int) ($user->bus_factor_in_org_raw ?? 1),
             ];
@@ -548,7 +501,7 @@ class PlanningSimulationService
         ];
     }
 
-    private function buildTotals(array $perProject, array $perSkill, array $perDay, array $shifts, int $totalUsers, int $workingDays, array $orgAgg): array
+    private function buildTotals(array $perProject, array $perSkill, array $perDay, int $totalUsers, int $workingDays, array $orgAgg): array
     {
         $headcountPeak = ['count' => 0, 'date' => null];
         $fteDays = 0.0;
@@ -599,7 +552,7 @@ class PlanningSimulationService
         ];
     }
 
-    private function emptyResponse(string $month, float $startMicro): array
+    private function emptyResponse(string $month): array
     {
         $orgAgg = $this->computeOrgAggregates([]);
         $risk = $orgAgg['risk']['before'];
@@ -621,7 +574,6 @@ class PlanningSimulationService
             'per_skill_impact' => [],
             'per_day_load' => [],
             'hotspots' => [],
-            'skill_concentration_shifts' => [],
             'cascading_risks' => [],
             'warnings' => [],
             'comparison_vs_baseline' => [
@@ -630,13 +582,6 @@ class PlanningSimulationService
                 'coverage_pct' => ['before' => $cov, 'after' => $cov],
                 'projects_healthy_count' => ['before' => $orgAgg['healthy']['before'], 'after' => $orgAgg['healthy']['before']],
             ],
-            'meta' => [
-                'computed_at' => Carbon::now()->toIso8601String(),
-                'computation_ms' => (int) round((microtime(true) - $startMicro) * 1000),
-                'absences_evaluated' => 0,
-                'month' => $month,
-            ],
-            'overall_severity' => 'ok',
         ];
     }
 }
