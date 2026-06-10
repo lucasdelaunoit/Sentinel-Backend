@@ -9,7 +9,6 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\OrganizationSettingController;
 use App\Http\Controllers\PlanningController;
 use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\RuleController;
 use App\Http\Controllers\SkillCategoryController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\UserController;
@@ -130,13 +129,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/holidays', [CompanyHolidayController::class, 'createCompanyHoliday']);
         Route::patch('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'updateCompanyHoliday']);
         Route::delete('/holidays/{companyHoliday}', [CompanyHolidayController::class, 'deleteCompanyHoliday']);
-
-        /* ----------------- RULES ----------------- */
-        Route::get('/rules/violations', [RuleController::class, 'getRuleViolations']);
-        Route::get('/rules', [RuleController::class, 'getAgileRules']);
-        Route::post('/rules', [RuleController::class, 'createRule']);
-        Route::patch('/rules/{rule}', [RuleController::class, 'updateRule']);
-        Route::delete('/rules/{rule}', [RuleController::class, 'deleteRule']);
 
         /* ----------------- DEPARTMENTS ----------------- */
         Route::get('/departments', [DepartmentController::class, 'getAgileDepartments']);

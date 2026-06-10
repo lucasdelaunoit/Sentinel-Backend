@@ -11,14 +11,12 @@ use App\Metrics\Stat;
 use App\Models\OrganizationSetting;
 use App\Models\Project;
 use App\Services\OrganizationSettingService;
-use App\Services\RuleEvaluator;
-use App\Services\RuleService;
 use App\Services\SkillCoverageService;
 use Illuminate\Support\Collection;
 
 /**
  * Fragility metric — composite 0-100 score blending bus risk, uncovered ratio, silo ratio,
- * absence impact, and rule violations. LAYER 1+2 per spec.
+ * and absence impact. LAYER 1+2 per spec.
  *
  * Scopes:
  *  - forProject — per-project fragility. Persists projects.fragility_raw + snapshot.
@@ -35,7 +33,7 @@ class FragilityCalculator
 
     /**
      * <summary>
-     *  CORE math. Composite blend with tolerance multiplier and additive rule penalty. Clamped 0-100.
+     *  CORE math. Composite blend with tolerance multiplier. Clamped 0-100.
      * </summary>
      *
      * @param int $busRisk 0-100, higher = worse
@@ -43,7 +41,6 @@ class FragilityCalculator
      * @param float $siloRatio 0-1
      * @param float $absenceImpact 0-1
      * @param OrganizationSetting $settings
-     * @param float $rulePenalty Additive after tolerance
      * @return float 0-100
      */
     private function calculateCore(
@@ -52,7 +49,6 @@ class FragilityCalculator
         float $siloRatio,
         float $absenceImpact,
         OrganizationSetting $settings,
-        float $rulePenalty,
     ): float {
         $wBus = (int) $settings->fragility_weight_bus_factor;
         $wUnc = (int) $settings->fragility_weight_uncovered_skills;
@@ -74,7 +70,6 @@ class FragilityCalculator
         };
 
         $fragility = min(100.0, $fragility * $tolerance);
-        $fragility += $rulePenalty;
 
         return max(0.0, min(100.0, $fragility));
     }
@@ -111,9 +106,7 @@ class FragilityCalculator
         $bf = $this->busFactor->computeRawForProject($project, $absentUserIds, $presentUserIds);
         $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
 
-        $rulePenalty = $this->computeRulePenalty($project, $settings);
-
-        return $this->calculateCore($busRisk, $uncoveredRatio, $siloRatio, $absenceImpact, $settings, $rulePenalty);
+        return $this->calculateCore($busRisk, $uncoveredRatio, $siloRatio, $absenceImpact, $settings);
     }
 
     /**
@@ -211,40 +204,5 @@ class FragilityCalculator
             )
             ->pluck('users.id')
             ->all();
-    }
-
-    private function computeRulePenalty(Project $project, OrganizationSetting $settings): float
-    {
-        $ruleService = app(RuleService::class);
-        $rules = $ruleService->getEnabledRules();
-        if ($rules->isEmpty()) return 0.0;
-
-        $applicable = $rules->filter(fn($r) => $this->ruleAppliesTo($r, $project));
-        if ($applicable->isEmpty()) return 0.0;
-
-        $evaluator = app(RuleEvaluator::class);
-        $allViolations = $evaluator->evaluateOrganization();
-
-        $hit = 0;
-        foreach ($allViolations as $v) {
-            if ($v['subject_type'] === 'project' && (int) $v['subject_id'] === $project->id) {
-                $hit++;
-            } elseif ($v['subject_type'] === 'organization') {
-                $ruleId = (int) $v['rule_id'];
-                $rule = $applicable->firstWhere('id', $ruleId);
-                if ($rule) $hit++;
-            }
-        }
-
-        return ($hit / $applicable->count()) * (int) $settings->rule_violation_penalty;
-    }
-
-    private function ruleAppliesTo($rule, Project $project): bool
-    {
-        return match ($rule->scope_type) {
-            'project' => (int) $rule->scope_id === (int) $project->id,
-            'department' => $project->users()->where('department_id', $rule->scope_id)->exists(),
-            default => true,
-        };
     }
 }
