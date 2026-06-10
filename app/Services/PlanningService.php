@@ -25,7 +25,7 @@ class PlanningService
         $monthEnd   = (clone $monthStart)->endOfMonth();
 
         $users = User::query()
-            ->with(['department', 'skills', 'projects', 'absences' => function ($q) use ($monthStart, $monthEnd) {
+            ->with(['department', 'absences' => function ($q) use ($monthStart, $monthEnd) {
                 $q->where('start_date', '<=', $monthEnd)->where('end_date', '>=', $monthStart);
             }])
             ->orderBy('lastname')
@@ -47,16 +47,9 @@ class PlanningService
             'id'         => (string) $u->id,
             'firstname'  => $u->firstname ?? '',
             'lastname'   => $u->lastname ?? '',
-            'initials'   => $this->initials($u),
             'title'      => $u->title ?? '',
             'department' => $u->department ? ['id' => $u->department->id, 'name' => $u->department->name] : null,
-            'color'      => 'bg-slate-500',
-            'skills'     => $u->skills->map(fn($s) => [
-                'id'    => $s->id,
-                'name'  => $s->name,
-                'level' => (int) ($s->pivot->level ?? 0),
-            ])->values()->all(),
-            'projects'   => $u->projects->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->all(),
+            'status'     => $u->status,
             'absences'   => $u->absences->map(fn(Absence $a) => [
                 'id'         => $a->id,
                 'type'       => $a->type?->value,
@@ -105,12 +98,5 @@ class PlanningService
     {
         [$y, $m] = explode('-', $month);
         return [(int) $y, (int) $m];
-    }
-
-    private function initials(User $u): string
-    {
-        $f = strtoupper(substr($u->firstname ?? '', 0, 1));
-        $l = strtoupper(substr($u->lastname ?? '', 0, 1));
-        return $f . $l ?: 'U';
     }
 }

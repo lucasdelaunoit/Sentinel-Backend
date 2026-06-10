@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
  * <summary>
  *  Absence what-if engine. Given a set of pending absences, produces the rich simulate
  *  payload: totals, per-user / per-project / per-skill impact, day-load, hotspots,
- *  cascading risks, warnings, recommendations, comparison vs baseline. Pure read — persists
+ *  cascading risks, warnings, comparison vs baseline. Pure read — persists
  *  nothing. Reuses SkillCoverageService for the per-project coverage matrix so business
  *  rules stay consistent with the rest of the app.
  * </summary>
@@ -81,7 +81,6 @@ class PlanningSimulationService
         $shifts   = $this->buildShifts($perSkill);
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
-        $recs      = $this->buildRecommendations($perUser, $perSkill, $hotspots, $usersById);
         $orgAgg    = $this->computeOrgAggregates($perProject);
         $totals    = $this->buildTotals($perProject, $perSkill, $perDay, $shifts, $totalUsers, $workingDays, $orgAgg);
 
@@ -95,7 +94,6 @@ class PlanningSimulationService
             'skill_concentration_shifts' => $shifts,
             'cascading_risks'            => $cascading,
             'warnings'                   => $warnings,
-            'recommendations'            => $recs,
             'comparison_vs_baseline'     => $this->buildComparison($totals, $orgAgg),
             'meta' => [
                 'computed_at'        => Carbon::now()->toIso8601String(),
@@ -477,67 +475,25 @@ class PlanningSimulationService
             if ($s['owners_left'] === 0) {
                 foreach ($s['dates_uncovered'] as $d) {
                     $w[] = [
-                        'code'       => 'CRITICAL_SKILL_GONE',
-                        'severity'   => 'critical',
-                        'skill_id'   => $s['skill_id'],
-                        'date'       => $d,
-                        'message'    => "No {$s['name']} owner on {$d}",
+                        'code' => 'Critical skill gone',
+                        'severity' => 'critical',
+                        'skill_id' => $s['skill_id'],
+                        'date' => $d,
+                        'message' => "No {$s['name']} owner on {$d}",
                         'actionable' => true,
                     ];
                 }
             }
         }
         foreach ($shifts as $sh) {
-            $w[] = ['code' => 'BUS_FACTOR_1_CREATED', 'severity' => 'warning', 'skill_id' => $sh['skill_id'], 'message' => "{$sh['skill_name']} → bus factor 1"];
+            $w[] = ['code' => 'Bus factor 1 created', 'severity' => 'warning', 'skill_id' => $sh['skill_id'], 'message' => "{$sh['skill_name']} → bus factor 1"];
         }
         foreach ($perDay as $d) {
             if ($d['absent_count'] >= 4) {
-                $w[] = ['code' => 'PEAK_OVERLAP', 'severity' => 'warning', 'date' => $d['date'], 'user_ids' => $d['absent_user_ids'], 'message' => "{$d['absent_count']} absences overlap on {$d['date']}"];
+                $w[] = ['code' => 'Peak overlap', 'severity' => 'warning', 'date' => $d['date'], 'user_ids' => $d['absent_user_ids'], 'message' => "{$d['absent_count']} absences overlap on {$d['date']}"];
             }
         }
         return $w;
-    }
-
-    private function buildRecommendations(array $perUser, array $perSkill, array $hotspots, Collection $usersById): array
-    {
-        $recs = [];
-        $i = 1;
-        foreach ($perUser as $u) {
-            $top = $u['replacement_candidates'][0] ?? null;
-            if ($u['severity'] === 'critical' && $top && $top['skill_match_pct'] >= 70) {
-                $name = $usersById[(int) $u['user_id']]?->firstname ?? "user {$u['user_id']}";
-                $recs[] = [
-                    'id'              => 'r' . $i,
-                    'type'            => 'REASSIGN',
-                    'priority'        => $i++,
-                    'title'           => "Cover for {$name}",
-                    'detail'          => "Assign {$top['name']} ({$top['skill_match_pct']}% skill match) during absence",
-                ];
-            }
-        }
-        foreach ($perSkill as $s) {
-            if ($s['owners_left'] <= 1 && $s['is_critical_for_org']) {
-                $recs[] = [
-                    'id'        => 'r' . $i,
-                    'type'      => 'UPSKILL',
-                    'priority'  => $i++,
-                    'title'     => "Cross-train on {$s['name']}",
-                    'detail'    => "Only {$s['owners_left']} owner" . ($s['owners_left'] === 1 ? '' : 's') . " left — train one more engineer",
-                ];
-            }
-        }
-        foreach ($hotspots as $h) {
-            if ($h['severity'] === 'critical') {
-                $recs[] = [
-                    'id'              => 'r' . $i,
-                    'type'            => 'RESCHEDULE',
-                    'priority'        => $i++,
-                    'title'           => "Spread absences around {$h['date_range'][0]}",
-                    'detail'          => count($h['absent_user_ids']) . " overlapping — shift one absence by 2 days",
-                ];
-            }
-        }
-        return $recs;
     }
 
     /**
@@ -668,7 +624,6 @@ class PlanningSimulationService
             'skill_concentration_shifts' => [],
             'cascading_risks' => [],
             'warnings' => [],
-            'recommendations' => [],
             'comparison_vs_baseline' => [
                 'risk_score' => ['before' => $risk, 'after' => $risk, 'delta_pct' => 0],
                 'bus_factor' => ['before' => $bus, 'after' => $bus],
