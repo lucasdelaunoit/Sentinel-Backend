@@ -18,6 +18,7 @@ class ApplyPlanningRequest extends FormRequest
             'absences.*.start_half'   => ['nullable', 'integer', 'in:0,1'],
             'absences.*.end_half'     => ['nullable', 'integer', 'in:0,1'],
             'absences.*.type'         => ['nullable', Rule::enum(AbsenceType::class)],
+            'absences.*.reason'       => ['nullable', 'string', 'max:256'],
             'scenario_name'           => ['nullable', 'string', 'max:255'],
         ];
     }

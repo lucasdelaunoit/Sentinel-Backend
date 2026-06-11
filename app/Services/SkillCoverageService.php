@@ -23,20 +23,23 @@ class SkillCoverageService
      *  $absentUserIds adds a virtual absence roster on top of real absences — used by simulations.
      *  $presentUserIds forces users to count as available regardless of their real horizon-absence —
      *  used to build a clean baseline isolating one person's impact (Upcoming Risk Events).
+     *  $horizonDays overrides the org absence_horizon_days setting — pass 0 for a point-in-time
+     *  "today" matrix where only users absent today are excluded (dashboard radar).
      * </summary>
      *
      * @param Project $project Target project
      * @param array<int> $absentUserIds Virtual absence roster (simulation). Empty for live state.
      * @param array<int> $presentUserIds Users forced present, overriding their real horizon-absence.
+     * @param int|null $horizonDays Absence look-ahead in days. Null uses the org setting.
      * @return array<int, array{skill_id:int,skill_name:string,required_level:int,employees:array<int,array{user_id:int,name:string,level:int}>,status:string}>
      */
-    public function getCoverage(Project $project, array $absentUserIds = [], array $presentUserIds = []): array
+    public function getCoverage(Project $project, array $absentUserIds = [], array $presentUserIds = [], ?int $horizonDays = null): array
     {
         $project->loadMissing(['skillRequirements', 'users.skills', 'users.absences']);
 
         $settings      = $this->orgSettings->getOrganizationSetting();
         $siloThreshold = (int) $settings->silo_threshold;
-        $horizonDays   = (int) $settings->absence_horizon_days;
+        $horizonDays   = $horizonDays ?? (int) $settings->absence_horizon_days;
 
         $today      = Carbon::today();
         $horizonEnd = (clone $today)->addDays($horizonDays);
@@ -105,11 +108,14 @@ class SkillCoverageService
     /**
      * <summary>
      *  Org-wide knowledge-coverage broken down per skill category — feeds the competency radar.
-     *  Every SkillCategory is a radar axis (stable even with zero requirements). Walks every active
-     *  project's coverage matrix (reuses getCoverage — the single source of truth) and buckets each
-     *  required skill into its category as safe / siloed / uncovered. coverage_pct = safe / total per
-     *  category (100 when a category has no requirements). most_fragile is the lowest-coverage
-     *  category that actually has requirements. Read-only — writes nothing.
+     *  Walks every active project's coverage matrix (reuses getCoverage — the single source of truth)
+     *  and buckets each required skill into its category as safe / siloed / uncovered.
+     *  coverage_pct = covered / required per category, where covered = safe + siloed (at least one
+     *  available holder — a siloed skill is covered, just fragile). Categories with no requirement
+     *  across active projects are dropped: they are not a radar axis and would otherwise render as a
+     *  misleading 100% spike. The matrix is point-in-time (horizon 0): the card shows TODAY's
+     *  coverage, so only users absent today are excluded — not everyone with an absence somewhere in
+     *  absence_horizon_days. most_fragile is the lowest-coverage category. Read-only — writes nothing.
      * </summary>
      *
      * @return KnowledgeCoverageBreakdown categories[] (one per skill category) + most_fragile
@@ -137,7 +143,7 @@ class SkillCoverageService
             ->get();
 
         foreach ($projects as $project) {
-            foreach ($this->getCoverage($project) as $row) {
+            foreach ($this->getCoverage($project, [], [], 0) as $row) {
                 $categoryId = $skillCategory[$row['skill_id']] ?? null;
                 if ($categoryId === null || !isset($acc[$categoryId])) {
                     continue;
@@ -157,7 +163,10 @@ class SkillCoverageService
         $worstPct = null;
         foreach ($acc as $bucket) {
             $total = $bucket['safe'] + $bucket['siloed'] + $bucket['uncovered'];
-            $pct = $total === 0 ? 100 : (int) round(($bucket['safe'] / $total) * 100);
+            if ($total === 0) {
+                continue;
+            }
+            $pct = (int) round((($bucket['safe'] + $bucket['siloed']) / $total) * 100);
 
             $result[] = [
                 'category_id' => $bucket['category_id'],
@@ -170,7 +179,7 @@ class SkillCoverageService
                 'uncovered_skills' => array_values($bucket['uncovered_skills']),
             ];
 
-            if ($total > 0 && ($worstPct === null || $pct < $worstPct)) {
+            if ($worstPct === null || $pct < $worstPct) {
                 $worstPct = $pct;
                 $mostFragile = $bucket['category_name'];
             }

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\AbsenceHalf;
+use App\Enums\AbsenceType;
 use App\Models\Absence;
 use App\Models\User;
 use Carbon\Carbon;
@@ -62,9 +64,9 @@ class PlanningService
                 'id'         => $a->id,
                 'type'       => $a->type?->value,
                 'start_date' => $a->start_date?->toDateString(),
-                'start_half' => 0,
+                'start_half' => $a->start_half === AbsenceHalf::Afternoon ? 1 : 0,
                 'end_date'   => $a->end_date?->toDateString(),
-                'end_half'   => 1,
+                'end_half'   => $a->end_half === AbsenceHalf::Morning ? 0 : 1,
                 'reason'     => $a->reason,
             ])->values()->all(),
         ];
@@ -96,8 +98,10 @@ class PlanningService
             $abs = Absence::create([
                 'user_id' => (int) $a['user_id'],
                 'start_date' => $a['start_date'],
+                'start_half' => $this->planningHalfToEnum($a['start_half'] ?? null),
                 'end_date' => $a['end_date'],
-                'type' => $a['type'] ?? 'planned',
+                'end_half' => $this->planningHalfToEnum($a['end_half'] ?? null),
+                'type' => $a['type'] ?? AbsenceType::Vacation,
                 'reason' => $a['reason'] ?? null,
             ]);
             $ids[] = $abs->id;
@@ -106,6 +110,19 @@ class PlanningService
     }
 
     /* ─────────────────────── helpers ─────────────────────── */
+
+    /**
+     * Planning payloads address halves as 0 (morning) / 1 (afternoon);
+     * the Absence model stores them as the AbsenceHalf string enum.
+     */
+    private function planningHalfToEnum(int|string|null $half): ?AbsenceHalf
+    {
+        if ($half === null) {
+            return null;
+        }
+        return ((int) $half) === 1 ? AbsenceHalf::Afternoon : AbsenceHalf::Morning;
+    }
+
 
     private function parseMonth(string $month): array
     {
