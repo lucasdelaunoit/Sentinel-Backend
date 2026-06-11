@@ -81,7 +81,15 @@ class SkillCategoryManager
         });
     }
 
-    public function getKCI(SkillCategory $category): array
+    /**
+     * <summary>
+     *  Assemble the KCI (Knowledge Coverage Index) payload for a category.
+     * </summary>
+     *
+     * @param SkillCategory $category Target category
+     * @return array{category_id: int, category_name: string, kci: float} KCI payload
+     */
+    public function getSkillCategoryKCI(SkillCategory $category): array
     {
         return [
             'category_id' => $category->id,

@@ -40,10 +40,10 @@ class SkillCategoryController extends Controller
      * @param StoreSkillCategoryRequest $request name (unique)
      * @return SkillCategoryResource Created category — HTTP 201
      */
-    public function createCategory(StoreSkillCategoryRequest $request): SkillCategoryResource
+    public function createSkillCategory(StoreSkillCategoryRequest $request): SkillCategoryResource
     {
         // Act (Manager)
-        $category = $this->skillCategoryManager->createCategory($request->validated());
+        $category = $this->skillCategoryManager->createSkillCategory($request->validated());
 
         // Return (Controller)
         return new SkillCategoryResource($category);
@@ -92,10 +92,10 @@ class SkillCategoryController extends Controller
      * @param SkillCategory $skillCategory Route-model bound category
      * @return JsonResponse category_id, category_name, kci
      */
-    public function getKCI(SkillCategory $skillCategory): JsonResponse
+    public function getSkillCategoryKCI(SkillCategory $skillCategory): JsonResponse
     {
         // Act (Manager)
-        $kci = $this->skillCategoryManager->getKCI($skillCategory);
+        $kci = $this->skillCategoryManager->getSkillCategoryKCI($skillCategory);
 
         // Return (Controller)
         return response()->json($kci);

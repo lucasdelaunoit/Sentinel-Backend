@@ -105,7 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/planning/apply', [PlanningController::class, 'applyPlanning']);
 
     /* ----------------- DERIVED METRICS (not settings) ----------------- */
-    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
+    Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getSkillCategoryKCI']);
 
     /** ---------------------- [ SETTINGS ] ---------------------- */
     Route::prefix('settings')->group(function () {
@@ -135,7 +135,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         /* ----------------- SKILL CATEGORIES ----------------- */
         Route::get('/skill-categories', [SkillCategoryController::class, 'getAgileSkillCategories']);
-        Route::post('/skill-categories', [SkillCategoryController::class, 'createCategory']);
+        Route::post('/skill-categories', [SkillCategoryController::class, 'createSkillCategory']);
         Route::patch('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'updateSkillCategory']);
         Route::delete('/skill-categories/{skillCategory}', [SkillCategoryController::class, 'deleteSkillCategory']);
 
