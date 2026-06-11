@@ -18,20 +18,27 @@
 
 ---
 
-## Table of Contents
+## Table of contents
 
 - [Why Sentinel](#why-sentinel)
-- [The Mental Model](#the-mental-model)
-- [The Metrics Pipeline](#the-metrics-pipeline)
-- [Project Status](#project-status)
-- [Tech Stack](#tech-stack)
+- [The mental model](#the-mental-model)
+- [The metrics pipeline](#the-metrics-pipeline)
+  - [Layer 0 — Coverage matrix](#layer-0--coverage-matrix)
+  - [Layer 1 — Atomic project metrics](#layer-1--atomic-project-metrics)
+  - [Layer 2 — Composite fragility score](#layer-2--composite-fragility-score)
+  - [Layer 3 — Organization aggregates](#layer-3--organization-aggregates)
+  - [Layer 4 — Simulation](#layer-4--simulation)
+- [Project status](#project-status)
+- [Tech stack](#tech-stack)
 - [Architecture](#architecture)
-- [Domain Model](#domain-model)
-- [Recalculation System](#recalculation-system)
-- [API Overview](#api-overview)
-- [Getting Started](#getting-started)
-- [Conventions](#conventions)
-- [Critical Rules](#critical-rules)
+  - [The QueryParams boundary](#the-queryparams-boundary)
+  - [Error handling](#error-handling)
+  - [Directory map](#directory-map)
+- [Domain model](#domain-model)
+- [Recalculation system](#recalculation-system)
+- [API overview](#api-overview)
+- [Getting started](#getting-started)
+- [Critical rules](#critical-rules)
 
 ---
 
@@ -49,7 +56,7 @@ It does this by modeling the organization as a graph of **skills**, **people**, 
 
 ---
 
-## The Mental Model
+## The mental model
 
 Sentinel is not a CRUD app wearing a dashboard. It is a deterministic pipeline:
 
@@ -75,11 +82,11 @@ Everything downstream is a function of this matrix. If coverage is correct, ever
 
 ---
 
-## The Metrics Pipeline
+## The metrics pipeline
 
 Five layers, each consuming only the layer below. Four inputs feed the whole thing: organization settings (weights, thresholds, horizons), project assignments and skill requirements, user skills and absences, and enabled rules.
 
-### Layer 0 — Coverage Matrix
+### Layer 0 — Coverage matrix
 
 For each required skill on a project:
 
@@ -87,7 +94,7 @@ For each required skill on a project:
 2. Keep users whose skill level meets `required_level`.
 3. Resolve status: `0` covering → `uncovered` · `≤ silo_threshold` → `siloed` · otherwise → `safe`.
 
-### Layer 1 — Atomic Project Metrics
+### Layer 1 — Atomic project metrics
 
 | Metric | Definition |
 |---|---|
@@ -99,7 +106,7 @@ For each required skill on a project:
 
 Bus factor uses greedy approximation — never brute force in production.
 
-### Layer 2 — Composite Fragility Score
+### Layer 2 — Composite fragility score
 
 ```
 busRisk = busFactor >= 5 ? 0 : max(0, 100 - busFactor * 20)
@@ -125,7 +132,7 @@ The `tolerance_factor` reflects the organization's risk posture: `conservative =
 | ≤ 80 | `fragile` |
 | > 80 | `critical` |
 
-### Layer 3 — Organization Aggregates
+### Layer 3 — Organization aggregates
 
 - **Average fragility** across non-archived projects.
 - **KCI (Knowledge Coverage Index)** per skill category — users at or above `kci_min_level` in the category, over all users with any skill in it.
@@ -138,7 +145,7 @@ A simulation is the same pipeline, re-run with a virtual absence roster injected
 
 ---
 
-## Project Status
+## Project status
 
 > **The calculation engine is currently stubbed.**
 > `SkillCoverageService`, `RiskCalculationService`, and `RecalculateProjectRiskJob` return hardcoded realistic values so the rest of the system stays compilable while the real engine is rebuilt from scratch. The API surface, domain model, seeders, and architecture are live; the math described above is the **target design**, not what runs today.
@@ -147,7 +154,7 @@ A simulation is the same pipeline, re-run with a virtual absence roster injected
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Choice | Notes |
 |---|---|---|
@@ -159,7 +166,7 @@ A simulation is the same pipeline, re-run with a virtual absence roster injected
 | Tests | PHPUnit 11 | `composer test` |
 | Tooling | Pint, Sail, Vite | Linting, optional Docker, asset build |
 
-The React frontend (Vite + SWR + ShadCN) lives in its own repository. This is the API.
+The React frontend (React 19 + Vite + TanStack Query + ShadCN) lives in its own repository. This is the API.
 
 ---
 
@@ -209,12 +216,11 @@ database/
 ├── seeders/            11 seeders — realistic demo organization
 └── factories/          7 factories
 routes/api.php          Explicit routes, grouped by entity
-CLAUDE.md               Full engineering specification — read before touching metrics
 ```
 
 ---
 
-## Domain Model
+## Domain model
 
 **Core entities:** `User`, `Skill`, `SkillCategory`, `Project`, `Department`, `Absence`, `CompanyHoliday`, `OrganizationSetting`.
 
@@ -236,7 +242,7 @@ Worth knowing:
 
 ---
 
-## Recalculation System
+## Recalculation system
 
 Metrics are **never** computed synchronously in a request. The target flow:
 
@@ -252,7 +258,7 @@ Controllers read the precomputed columns. A change to `organization_settings` tr
 
 ---
 
-## API Overview
+## API overview
 
 All endpoints sit behind Sanctum — `POST /auth/login` returns a token. The surface, by neighborhood:
 
@@ -279,7 +285,7 @@ Routes are declared explicitly in `routes/api.php` — no `apiResource()` magic,
 
 ---
 
-## Getting Started
+## Getting started
 
 **Prerequisites:** PHP 8.2+, Composer, Node.js, PostgreSQL or MySQL, Redis.
 
@@ -306,21 +312,7 @@ Sail is available if you prefer Docker, but nothing requires it.
 
 ---
 
-## Conventions
-
-A few house rules that make the codebase predictable:
-
-- **Explicit verb+noun method names, everywhere.** `getAgileUsers`, `attachSkillToUser`, `deleteSkillCategory` — never `index`, `store`, `destroy`. The Controller / Manager / Service trio shares the exact same method name, including the full entity noun (no `deleteCategory` shorthand).
-- **Every public Manager and Service method carries a docblock** in the project format, stating side effects (cascade, dispatch, transaction) explicitly. `@throws Throwable` is mandatory on any transactional Manager method.
-- **Controller bodies are sectioned** with `// Act (Manager)` and `// Return (Controller)` comments (plus `// Validate & authorize` when guard logic exists beyond the FormRequest).
-- **No column-alignment padding.** One space around `=` and `=>`, always — aligned columns rot into whitespace-storm diffs.
-- **Eager loading by default.** N+1 queries are treated as bugs.
-
-The complete specification — including canonical code examples for every pattern above — lives in [`CLAUDE.md`](CLAUDE.md).
-
----
-
-## Critical Rules
+## Critical rules
 
 1. **All metrics derive from skill coverage.** No exceptions, no side channels, no metric that bypasses the matrix.
 2. **Simulation never alters real data.** Results live on the simulation record only.
