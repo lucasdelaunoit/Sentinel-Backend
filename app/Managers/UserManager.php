@@ -4,7 +4,6 @@ namespace App\Managers;
 
 use App\DTO\Stats\UserStats;
 use App\DTO\Stats\UsersStats;
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Metrics\Calculators\CriticalityCalculator;
 use App\Metrics\Calculators\UniqueSkillHoldersCalculator;
@@ -22,6 +21,8 @@ use Throwable;
 
 class UserManager
 {
+    use Concerns\DispatchesProjectRecalculations;
+
     public function __construct(
         private readonly UserService $userService,
         private readonly CriticalityCalculator $criticalityCalculator,
@@ -300,12 +301,4 @@ class UserManager
         );
     }
 
-    private function dispatchProjectRecalculations(User $user): void
-    {
-        $user->loadMissing('projects');
-
-        foreach ($user->projects as $project) {
-            RecalculateProjectRiskJob::dispatch($project);
-        }
-    }
 }

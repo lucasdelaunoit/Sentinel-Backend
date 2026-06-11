@@ -105,11 +105,7 @@ class AbsenceImpactCalculator
      */
     public function forOrg(): MetricSnapshot
     {
-        $today = now()->toDateString();
-        $absentUserIds = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->pluck('id')->all();
+        $absentUserIds = User::absentToday()->pluck('id')->all();
 
         if (empty($absentUserIds)) {
             return $this->metricsManager->persistOrgMetric(
@@ -144,14 +140,6 @@ class AbsenceImpactCalculator
      */
     private function getTodayAbsentUserIdsForProject(Project $project): array
     {
-        $today = now()->toDateString();
-
-        return $project->users()
-            ->whereHas('absences', fn($q) => $q
-                ->whereDate('start_date', '<=', $today)
-                ->whereDate('end_date', '>=', $today)
-            )
-            ->pluck('users.id')
-            ->all();
+        return $project->users()->absentToday()->pluck('users.id')->all();
     }
 }

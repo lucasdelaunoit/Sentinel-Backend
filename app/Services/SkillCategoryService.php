@@ -12,9 +12,28 @@ class SkillCategoryService
         private readonly OrganizationSettingService $orgSettings,
     ) {}
 
+    /**
+     * <summary>
+     *  Retrieve all skill categories with their skill count, ordered by name.
+     * </summary>
+     *
+     * @return Collection<int, SkillCategory> Categories with skills_count loaded
+     */
     public function getAgileSkillCategories(): Collection
     {
         return SkillCategory::withCount('skills')->orderBy('name')->get();
+    }
+
+    /**
+     * <summary>
+     *  Count all SkillCategory rows. Used by the Manager to enforce the category limit.
+     * </summary>
+     *
+     * @return int Number of existing skill categories
+     */
+    public function countSkillCategories(): int
+    {
+        return SkillCategory::count();
     }
 
     /**
@@ -45,7 +64,15 @@ class SkillCategoryService
         return round(($proficient / $totalHolders) * 100, 1);
     }
 
-    public function createCategory(array $data): SkillCategory
+    /**
+     * <summary>
+     *  Create a single SkillCategory row. Limit enforcement is the Manager's job.
+     * </summary>
+     *
+     * @param array{name: string} $data Validated payload
+     * @return SkillCategory Newly created category
+     */
+    public function createSkillCategory(array $data): SkillCategory
     {
         return SkillCategory::create($data);
     }

@@ -2,7 +2,6 @@
 
 namespace App\Managers;
 
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Services\PlanningService;
 use App\Services\PlanningSimulationService;
 use App\Services\UserService;
@@ -11,6 +10,8 @@ use Throwable;
 
 class PlanningManager
 {
+    use Concerns\DispatchesProjectRecalculations;
+
     public function __construct(
         private readonly PlanningService $planningService,
         private readonly PlanningSimulationService $planningSimulationService,
@@ -60,9 +61,7 @@ class PlanningManager
 
         $userIds = array_values(array_unique(array_map(fn(array $a) => (int) $a['user_id'], $absences)));
         $this->userService->getUsersWithProjectsByIds($userIds)->each(
-            fn($user) => $user->projects->each(
-                fn($project) => RecalculateProjectRiskJob::dispatch($project)
-            )
+            fn($user) => $this->dispatchProjectRecalculations($user)
         );
 
         return ['applied' => count($createdIds), 'created_ids' => $createdIds];

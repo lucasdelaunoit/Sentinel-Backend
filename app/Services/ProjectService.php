@@ -17,6 +17,7 @@ use App\Models\Project;
 use App\Models\Skill;
 use App\Models\SkillCategory;
 use App\Models\User;
+use App\Support\CompetencyRadar;
 use App\Support\QueryParams;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -29,7 +30,6 @@ use Spatie\QueryBuilder\QueryBuilder;
 class ProjectService
 {
     public function __construct(
-        private readonly SkillCoverageService $coverageService,
         private readonly MetricSnapshotService $snapshotService,
     ) {}
 
@@ -1111,38 +1111,8 @@ class ProjectService
         $project->loadMissing(['users.skills.category']);
 
         $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
+        $skills = $project->users->flatMap(fn(User $user) => $user->skills);
 
-        $sums = [];
-        $counts = [];
-        foreach ($categories as $category) {
-            $sums[$category->id] = 0;
-            $counts[$category->id] = 0;
-        }
-
-        foreach ($project->users as $user) {
-            foreach ($user->skills as $skill) {
-                $categoryId = $skill->skill_category_id;
-                if (!isset($sums[$categoryId])) {
-                    continue;
-                }
-                $sums[$categoryId] += (int) $skill->pivot->level;
-                $counts[$categoryId]++;
-            }
-        }
-
-        $target = 80;
-        $result = [];
-        foreach ($categories as $category) {
-            $count = $counts[$category->id];
-            $value = $count === 0 ? 0 : (int) round(($sums[$category->id] / $count) / 5 * 100);
-
-            $result[] = [
-                'category' => $category->name,
-                'value' => $value,
-                'target' => $target,
-            ];
-        }
-
-        return $result;
+        return CompetencyRadar::build($categories, $skills);
     }
 }

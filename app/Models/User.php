@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserStatus;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -78,4 +79,16 @@ class User extends Authenticatable
         return $this->hasMany(Absence::class);
     }
 
+    /**
+     * Scope: users with an absence covering today.
+     */
+    public function scopeAbsentToday(Builder $query): Builder
+    {
+        $today = now()->toDateString();
+
+        return $query->whereHas('absences', fn($q) => $q
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+        );
+    }
 }

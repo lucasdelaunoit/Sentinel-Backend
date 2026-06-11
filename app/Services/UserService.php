@@ -14,6 +14,7 @@ use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Models\Project;
 use App\Models\SkillCategory;
 use App\Models\User;
+use App\Support\CompetencyRadar;
 use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -600,35 +601,6 @@ class UserService
 
         $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
 
-        $sums = [];
-        $counts = [];
-        foreach ($categories as $category) {
-            $sums[$category->id] = 0;
-            $counts[$category->id] = 0;
-        }
-
-        foreach ($user->skills as $skill) {
-            $categoryId = $skill->skill_category_id;
-            if (!isset($sums[$categoryId])) {
-                continue;
-            }
-            $sums[$categoryId] += (int) $skill->pivot->level;
-            $counts[$categoryId]++;
-        }
-
-        $target = 80;
-        $result = [];
-        foreach ($categories as $category) {
-            $count = $counts[$category->id];
-            $value = $count === 0 ? 0 : (int) round(($sums[$category->id] / $count) / 5 * 100);
-
-            $result[] = [
-                'category' => $category->name,
-                'value' => $value,
-                'target' => $target,
-            ];
-        }
-
-        return $result;
+        return CompetencyRadar::build($categories, $user->skills);
     }
 }

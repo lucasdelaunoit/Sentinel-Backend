@@ -28,14 +28,7 @@ class UsersAvailableCalculator
      */
     public function computeRawForOrg(): int
     {
-        $today = now()->toDateString();
-        $total = User::count();
-        $away = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
-
-        return $total - $away;
+        return User::count() - User::absentToday()->count();
     }
 
     /**
@@ -48,12 +41,8 @@ class UsersAvailableCalculator
      */
     public function forOrg(): MetricSnapshot
     {
-        $today = now()->toDateString();
-        $away = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
-        $available = $this->computeRawForOrg();
+        $away = User::absentToday()->count();
+        $available = User::count() - $away;
 
         $stat = new Stat(
             value: "{$available} available",

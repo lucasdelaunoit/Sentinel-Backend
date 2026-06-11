@@ -3,7 +3,6 @@
 namespace App\Managers;
 
 use App\DTO\Stats\UserAbsenceStats;
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\Absence;
 use App\Models\User;
 use App\Services\AbsenceService;
@@ -14,6 +13,8 @@ use Throwable;
 
 class AbsenceManager
 {
+    use Concerns\DispatchesProjectRecalculations;
+
     public function __construct(
         private readonly AbsenceService $absenceService,
     ) {}
@@ -100,12 +101,4 @@ class AbsenceManager
         );
     }
 
-    private function dispatchProjectRecalculations(?User $user): void
-    {
-        if ($user === null) return;
-        $user->loadMissing('projects');
-        foreach ($user->projects as $project) {
-            RecalculateProjectRiskJob::dispatch($project);
-        }
-    }
 }

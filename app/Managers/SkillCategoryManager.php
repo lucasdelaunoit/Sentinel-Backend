@@ -2,32 +2,52 @@
 
 namespace App\Managers;
 
+use App\Exceptions\SkillCategoryLimitExceededException;
 use App\Models\SkillCategory;
 use App\Services\SkillCategoryService;
 use App\Services\SkillService;
-use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SkillCategoryManager
 {
+    private const MAX_CATEGORIES = 8;
+
     public function __construct(
         private readonly SkillCategoryService $skillCategoryService,
         private readonly SkillService $skillService,
     ) {}
 
+    /**
+     * <summary>
+     *  Retrieve all skill categories with their skill count.
+     * </summary>
+     *
+     * @return Collection<int, SkillCategory> Categories with skills_count loaded
+     */
     public function getAgileSkillCategories(): Collection
     {
         return $this->skillCategoryService->getAgileSkillCategories();
     }
 
-    public function createCategory(array $data): SkillCategory
+    /**
+     * <summary>
+     *  Create a SkillCategory inside a transaction. Guards the org-wide category limit first.
+     * </summary>
+     *
+     * @param array{name: string} $data Validated payload
+     * @return SkillCategory Newly created category
+     * @throws SkillCategoryLimitExceededException When the category limit is already reached
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    public function createSkillCategory(array $data): SkillCategory
     {
-        if (SkillCategory::count() >= 8)
-            throw new Exception('Maximum of 8 skill categories allowed.');
+        if ($this->skillCategoryService->countSkillCategories() >= self::MAX_CATEGORIES) {
+            throw new SkillCategoryLimitExceededException(self::MAX_CATEGORIES);
+        }
 
-        return DB::transaction(fn() => $this->skillCategoryService->createCategory($data));
+        return DB::transaction(fn() => $this->skillCategoryService->createSkillCategory($data));
     }
 
     /**

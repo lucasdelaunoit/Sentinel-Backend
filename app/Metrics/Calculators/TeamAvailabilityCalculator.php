@@ -88,14 +88,7 @@ class TeamAvailabilityCalculator
      */
     public function computeRawForOrg(): float
     {
-        $today = now()->toDateString();
-        $total = User::count();
-        $absent = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
-
-        return $this->calculateCore($total, $absent);
+        return $this->calculateCore(User::count(), User::absentToday()->count());
     }
 
     /**
@@ -108,12 +101,8 @@ class TeamAvailabilityCalculator
      */
     public function forOrg(): MetricSnapshot
     {
-        $today = now()->toDateString();
         $total = User::count();
-        $absent = User::whereHas('absences', fn($q) => $q
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-        )->count();
+        $absent = User::absentToday()->count();
         $available = $total - $absent;
         $pct = (int) round($this->calculateCore($total, $absent));
 
