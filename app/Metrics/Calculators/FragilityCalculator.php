@@ -10,17 +10,24 @@ use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\OrganizationSetting;
 use App\Models\Project;
+use App\Services\AbsenceService;
 use App\Services\OrganizationSettingService;
 use App\Services\SkillCoverageService;
 use Illuminate\Support\Collection;
 
 /**
- * Fragility metric — composite 0-100 score blending bus risk, uncovered ratio, silo ratio,
- * and absence impact. LAYER 1+2 per spec.
+ * Fragility metric — composite 0-100 score (higher = worse). Spec LAYER 1+2.
  *
- * Scopes:
- *  - forProject — per-project fragility. Persists projects.fragility_raw + snapshot.
- *  - forOrg     — writes 3 org snapshots in one transaction (avg fragility, fragile count, worst fragility).
+ * How this calculator is built — read top to bottom:
+ *
+ *   LAYER 2 · CORE   calculateCore()            pure math: 4 scalars → score. No data access.
+ *   LAYER 1 · RAW    computeRawForProject()     coverage matrix → the 4 scalars → CORE. No DB writes.
+ *                    computeAbsenceImpactRatio() private helper: builds the absence_impact scalar.
+ *   SCOPE · PERSIST  forProject()               project scope: compute raw, write column + snapshot.
+ *                    forOrg()                    org scope: aggregate cached fragility_raw (no recompute).
+ *
+ * Rule of thumb: RAW methods are pure (reused by simulation, never persist); FOR methods persist.
+ * Raw DB queries live in injected Services (coverage, absences) — this class only does metric math.
  */
 class FragilityCalculator
 {
@@ -28,8 +35,11 @@ class FragilityCalculator
         private readonly SkillCoverageService $coverage,
         private readonly OrganizationSettingService $orgSettings,
         private readonly BusFactorCalculator $busFactor,
+        private readonly AbsenceService $absences,
         private readonly MetricsManager $metricsManager,
     ) {}
+
+    /* ════════════════ LAYER 2 · CORE — pure math ════════════════ */
 
     /**
      * <summary>
@@ -74,6 +84,8 @@ class FragilityCalculator
         return max(0.0, min(100.0, $fragility));
     }
 
+    /* ════════════════ LAYER 1 · RAW — matrix → scalars (no DB writes) ════════════════ */
+
     /**
      * <summary>
      *  Pure raw fragility score for a project. No DB writes. Reads the live coverage matrix and
@@ -108,6 +120,33 @@ class FragilityCalculator
 
         return $this->calculateCore($busRisk, $uncoveredRatio, $siloRatio, $absenceImpact, $settings);
     }
+
+    /**
+     * Newly-uncovered ratio when horizon absences are projected on top of the live state.
+     * Builds the absence_impact scalar consumed by computeRawForProject.
+     * $presentUserIds keeps forced-present users available in the projection (clean baseline isolation).
+     */
+    private function computeAbsenceImpactRatio(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings, array $presentUserIds = []): float
+    {
+        $total = count($baselineMatrix);
+        if ($total === 0) return 0.0;
+
+        $horizonAbsent = $this->absences->getHorizonAbsentUserIdsForProject($project, (int) $settings->absence_horizon_days);
+        $merged = array_values(array_unique(array_merge($absentUserIds, $horizonAbsent)));
+
+        if ($merged === $absentUserIds) return 0.0;
+
+        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds);
+        $newlyUncovered = 0;
+        foreach ($with as $sid => $row) {
+            if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {
+                $newlyUncovered++;
+            }
+        }
+        return $newlyUncovered / $total;
+    }
+
+    /* ════════════════ SCOPE · PERSIST — compute then write ════════════════ */
 
     /**
      * <summary>
@@ -163,46 +202,5 @@ class FragilityCalculator
             )],
             [MetricKey::DashboardWorstFragility, Stat::fromScale(FragilityScale::fromRaw($worst), $worst, $worstInsight)],
         ]);
-    }
-
-    /**
-     * Newly-uncovered ratio when horizon absences are projected on top of the live state.
-     * $presentUserIds keeps forced-present users available in the projection (clean baseline isolation).
-     */
-    private function computeAbsenceImpactRatio(Project $project, array $baselineMatrix, array $absentUserIds, OrganizationSetting $settings, array $presentUserIds = []): float
-    {
-        $total = count($baselineMatrix);
-        if ($total === 0) return 0.0;
-
-        $horizonAbsent = $this->getHorizonAbsentUserIds($project, (int) $settings->absence_horizon_days);
-        $merged = array_values(array_unique(array_merge($absentUserIds, $horizonAbsent)));
-
-        if ($merged === $absentUserIds) return 0.0;
-
-        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds);
-        $newlyUncovered = 0;
-        foreach ($with as $sid => $row) {
-            if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {
-                $newlyUncovered++;
-            }
-        }
-        return $newlyUncovered / $total;
-    }
-
-    /**
-     * @return array<int>
-     */
-    private function getHorizonAbsentUserIds(Project $project, int $horizonDays): array
-    {
-        $today = now()->toDateString();
-        $horizonEnd = now()->addDays($horizonDays)->toDateString();
-
-        return $project->users()
-            ->whereHas('absences', fn($q) => $q
-                ->whereDate('start_date', '<=', $horizonEnd)
-                ->whereDate('end_date', '>=', $today)
-            )
-            ->pluck('users.id')
-            ->all();
     }
 }

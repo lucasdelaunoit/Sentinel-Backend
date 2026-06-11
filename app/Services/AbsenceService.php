@@ -6,6 +6,7 @@ use App\Enums\AbsenceHalf;
 use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\Absence;
+use App\Models\Project;
 use App\Models\User;
 use App\Support\QueryParams;
 use Carbon\Carbon;
@@ -75,6 +76,31 @@ class AbsenceService
             ->whereDate('start_date', '<=', (clone $today)->addDays($horizonDays))
             ->orderBy('start_date')
             ->get();
+    }
+
+    /**
+     * <summary>
+     *  User IDs among a project's team who are absent at any point inside the horizon window
+     *  [today, today + horizonDays]. An absence overlaps when it starts on/before the horizon end
+     *  and ends on/after today. Used by FragilityCalculator to project absence impact.
+     * </summary>
+     *
+     * @param Project $project Target project whose team is checked
+     * @param int $horizonDays Forward window in days
+     * @return array<int> Distinct user IDs absent within the horizon
+     */
+    public function getHorizonAbsentUserIdsForProject(Project $project, int $horizonDays): array
+    {
+        $today = Carbon::today()->toDateString();
+        $horizonEnd = Carbon::today()->addDays($horizonDays)->toDateString();
+
+        return $project->users()
+            ->whereHas('absences', fn($q) => $q
+                ->whereDate('start_date', '<=', $horizonEnd)
+                ->whereDate('end_date', '>=', $today)
+            )
+            ->pluck('users.id')
+            ->all();
     }
 
     /**

@@ -12,14 +12,19 @@ use App\Models\User;
 use App\Services\SkillCoverageService;
 
 /**
- * Bus-factor metric — multi-scope. CORE math operates on a coverage matrix.
+ * Bus-factor metric — multi-scope. Spec LAYER 1.
  *
- * Scopes:
- *  - forProject — min covered count across required skills. Persists projects.bus_factor + snapshot.
- *  - forUser    — count of active projects where the user pushes bus factor &lt;= 2. Persists users.bus_factor_in_org_raw + snapshot.
+ * How this calculator is built — read top to bottom:
  *
- * compute*Raw methods are pure (no side effect) — used by sibling Calculators that need
- * the value without triggering persistence (e.g. FragilityCalculator consumes the project raw).
+ *   LAYER 2 · CORE   calculateCore()          pure math: coverage matrix → min covered count.
+ *   LAYER 1 · RAW    computeRawForProject()   matrix via coverage service → CORE. No DB writes.
+ *                    computeRawForUser()      count of active projects where user pushes bf &lt;= 2.
+ *   SCOPE · PERSIST  forProject()             project scope: compute raw, write column + snapshot.
+ *                    forUser()                user scope: compute raw, write column + snapshot.
+ *
+ * Rule of thumb: RAW methods are pure (reused by sibling Calculators — e.g. FragilityCalculator
+ * consumes the project raw — never persist); FOR methods persist. Raw DB queries live in injected
+ * Services (coverage) — this class only does metric math.
  */
 class BusFactorCalculator
 {
@@ -27,6 +32,8 @@ class BusFactorCalculator
         private readonly SkillCoverageService $coverage,
         private readonly MetricsManager $metricsManager,
     ) {}
+
+    /* ════════════════ LAYER 2 · CORE — pure math ════════════════ */
 
     /**
      * <summary>
@@ -48,6 +55,8 @@ class BusFactorCalculator
         return min($coveredCounts);
     }
 
+    /* ════════════════ LAYER 1 · RAW — matrix → value (no DB writes) ════════════════ */
+
     /**
      * <summary>
      *  Pure raw bus factor for a project. No DB writes. Accepts virtual absence roster for simulation
@@ -62,28 +71,6 @@ class BusFactorCalculator
     public function computeRawForProject(Project $project, array $absentUserIds = [], array $presentUserIds = []): int
     {
         return $this->calculateCore($this->coverage->getCoverage($project, $absentUserIds, $presentUserIds));
-    }
-
-    /**
-     * <summary>
-     *  Persist project bus_factor — updates projects.bus_factor + appends snapshot. Single transaction.
-     * </summary>
-     *
-     * @param Project $project
-     * @param array<int> $absentUserIds Simulation roster — leave empty for live state
-     * @return MetricSnapshot
-     * @throws \Throwable
-     */
-    public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
-    {
-        $bf = $this->computeRawForProject($project, $absentUserIds);
-        $stat = Stat::fromScale(
-            BusFactorScale::fromCount($bf),
-            $bf,
-            $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : 'No coverage',
-        );
-
-        return $this->metricsManager->persistProjectMetric($project, 'bus_factor', MetricKey::BusFactor, $stat);
     }
 
     /**
@@ -108,6 +95,30 @@ class BusFactorCalculator
                 && $this->computeRawForProject($p) <= 2
             )
             ->count();
+    }
+
+    /* ════════════════ SCOPE · PERSIST — compute then write ════════════════ */
+
+    /**
+     * <summary>
+     *  Persist project bus_factor — updates projects.bus_factor + appends snapshot. Single transaction.
+     * </summary>
+     *
+     * @param Project $project
+     * @param array<int> $absentUserIds Simulation roster — leave empty for live state
+     * @return MetricSnapshot
+     * @throws \Throwable
+     */
+    public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
+    {
+        $bf = $this->computeRawForProject($project, $absentUserIds);
+        $stat = Stat::fromScale(
+            BusFactorScale::fromCount($bf),
+            $bf,
+            $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : 'No coverage',
+        );
+
+        return $this->metricsManager->persistProjectMetric($project, 'bus_factor', MetricKey::BusFactor, $stat);
     }
 
     /**
