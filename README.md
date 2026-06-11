@@ -12,7 +12,7 @@
 ![PHP](https://img.shields.io/badge/PHP_8.2%2B-777BB4?logo=php&logoColor=white)
 ![Sanctum](https://img.shields.io/badge/Sanctum-FF2D20?logo=laravel&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white)
-![Status](https://img.shields.io/badge/metrics_engine-rebuilding-orange)
+![Status](https://img.shields.io/badge/status-active_development-blueviolet)
 
 </div>
 
@@ -84,7 +84,7 @@ Everything downstream is a function of this matrix. If coverage is correct, ever
 
 ## The metrics pipeline
 
-Five layers, each consuming only the layer below. Four inputs feed the whole thing: organization settings (weights, thresholds, horizons), project assignments and skill requirements, user skills and absences, and enabled rules.
+Five layers, each consuming only the layer below. Three inputs feed the whole thing: organization settings (weights, thresholds, horizons), project assignments and skill requirements, and user skills and absences. A fourth — hard-constraint rules feeding a fragility penalty — is designed but not yet built.
 
 ### Layer 0 — Coverage matrix
 
@@ -102,7 +102,7 @@ For each required skill on a project:
 | `uncovered_ratio` | `count(uncovered) / count(required)` |
 | `silo_ratio` | `count(siloed) / count(required)` |
 | `absence_impact` | Skills that become uncovered once horizon absences apply, over total required |
-| `rule_penalty` | `(violations / project_rules_count) × rule_violation_penalty` |
+| `rule_penalty` | *(planned)* `(violations / project_rules_count) × rule_violation_penalty` |
 
 Bus factor uses greedy approximation — never brute force in production.
 
@@ -118,7 +118,7 @@ fragility = (
     absenceImpact  * w_absence
 ) / sum(weights)
 
-fragility = min(100, fragility × tolerance_factor) + rule_penalty
+fragility = min(100, fragility × tolerance_factor) + rule_penalty   # rule_penalty: planned
 fragility = clamp(0, 100)
 ```
 
@@ -141,16 +141,19 @@ The `tolerance_factor` reflects the organization's risk posture: `conservative =
 
 ### Layer 4 — Simulation
 
-A simulation is the same pipeline, re-run with a virtual absence roster injected, then diffed against live values. It **must never** write to source tables, and it **must** reuse the live services via an `?absentUserIds = []` parameter on every metric method. One code path — duplicated formulas drift, and this codebase has the scar tissue to prove it.
+A simulation is the same pipeline, re-run with a virtual absence roster injected, then diffed against live values. It **never** writes to source tables, and it reuses the live services via the `$absentUserIds` parameter on every metric method — `SkillCoverageService` also accepts `$presentUserIds` to force someone available and isolate one person's impact. One code path — duplicated formulas drift, and this codebase has the scar tissue to prove it.
 
 ---
 
 ## Project status
 
-> **The calculation engine is currently stubbed.**
-> `SkillCoverageService`, `RiskCalculationService`, and `RecalculateProjectRiskJob` return hardcoded realistic values so the rest of the system stays compilable while the real engine is rebuilt from scratch. The API surface, domain model, seeders, and architecture are live; the math described above is the **target design**, not what runs today.
->
-> Grep `TODO: real implementation` to find every stub. Model observers that trigger recalculation are designed but not yet wired.
+The metrics engine is **live**. `SkillCoverageService` builds the real coverage matrix (horizon-aware, with virtual absence and forced-presence rosters for simulations), and the calculators in `app/Metrics/Calculators/` — `BusFactorCalculator`, `FragilityCalculator`, `CriticalityCalculator`, `KnowledgeCoverageCalculator` — implement the math above. Every recalculation writes both the project's cache columns and a `metric_snapshots` row, so trend history captures each change.
+
+Still in flight:
+
+- **Rules engine** — the `rule_penalty` input to fragility is designed but not yet implemented; fragility currently runs on the four coverage-derived scalars.
+- **A few recalculation triggers** — most mutations dispatch `RecalculateProjectRiskJob` from their Manager, but a couple of dispatch points (skill category changes, skill-wide updates) are still marked `TODO` in the code.
+- **Snapshot read API** — snapshots are written on every recalculation; the endpoints that serve trend lines to the frontend are not wired yet.
 
 ---
 
@@ -204,10 +207,15 @@ No `abort()`, `abort_if()`, or `response()` below the Controller. Guards throw d
 app/
 ├── Http/Controllers/   13 controllers — thin, HTTP-only
 ├── Managers/           13 managers — orchestration, transactions, job dispatch
-├── Services/           15 services — one per entity + calculation engine
+├── Services/           15 services — one per entity, incl. SkillCoverageService (Layer 0)
+├── Metrics/
+│   ├── Calculators/    BusFactor, Fragility, Criticality, KnowledgeCoverage (Layers 1–3)
+│   ├── Snapshots/      MetricSnapshot persistence — trend history per recalculation
+│   └── Scales/         Tier mappings (fragility, bus factor)
 ├── Models/             User, Project, Skill, SkillCategory, Department,
 │                       Absence, CompanyHoliday, OrganizationSetting
-├── Jobs/               RecalculateProjectRiskJob (queued, debounced)
+├── Jobs/               RecalculateProjectRiskJob (queued)
+├── DTO/                Structured stats payloads (ProjectStats, UserStats, ...)
 ├── Enums/              UserStatus, ProjectStatus, AbsenceType, AbsenceHalf
 ├── Exceptions/         Domain exceptions, mapped to HTTP by the handler
 └── Support/            QueryParams, AbsenceSlot, CompetencyRadar
@@ -244,17 +252,18 @@ Worth knowing:
 
 ## Recalculation system
 
-Metrics are **never** computed synchronously in a request. The target flow:
+Metrics are **never** computed synchronously in a request:
 
 ```
-Model Observer (skills / assignments / requirements / absences change)
-   → RecalculateProjectRiskJob (queued, debounced)
-      → SkillCoverageService::getCoverage(project)
-      → RiskCalculationService::computeBusFactor / computeFragilityRaw
-      → Project::update([bus_factor, fragility_raw])
+Manager mutation (skills / assignments / requirements / absences)
+   → RecalculateProjectRiskJob (queued)
+      → ProjectManager::recalculateProjectMetrics(project)
+         → SkillCoverageService::getCoverage(project)
+         → BusFactorCalculator / FragilityCalculator
+         → Project cache columns + metric snapshot — one transaction
 ```
 
-Controllers read the precomputed columns. A change to `organization_settings` triggers a bulk recalculation of all projects. This is why the queue worker is required, not optional — without it, recalculation jobs just pile up politely.
+Controllers read the precomputed columns. The job is deliberately *not* unique-per-project: every dispatch produces a snapshot row, so the trend history records every change rather than the last one in a burst. This is why the queue worker is required, not optional — without it, recalculation jobs just pile up politely.
 
 ---
 
@@ -315,7 +324,7 @@ Sail is available if you prefer Docker, but nothing requires it.
 ## Critical rules
 
 1. **All metrics derive from skill coverage.** No exceptions, no side channels, no metric that bypasses the matrix.
-2. **Simulation never alters real data.** Results live on the simulation record only.
+2. **Simulation never alters real data.** Virtual rosters travel as parameters through the live pipeline — source tables are never touched.
 3. **Bus factor uses greedy approximation.** Brute force is for whiteboards, not production.
 4. **Logic stays deterministic and testable.** Same inputs, same fragility — always.
 
