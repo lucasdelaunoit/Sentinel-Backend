@@ -17,7 +17,6 @@ use App\Models\User;
 use App\Services\UserService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -39,12 +38,12 @@ class UserManager
      *  Retrieve paginated, filterable, sortable list of users via Spatie QueryBuilder.
      * </summary>
      *
-     * @param Request $request Pagination, filter, sort & search parameters
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
      * @return LengthAwarePaginator Paginated users with department and skills
      */
-    public function getAgileUsers(Request $request): LengthAwarePaginator
+    public function getAgileUsers(QueryParams $params): LengthAwarePaginator
     {
-        return $this->userService->getAgileUsers($request);
+        return $this->userService->getAgileUsers($params);
     }
 
     /**

@@ -34,7 +34,11 @@ class UserController extends Controller
      */
     public function getAgileUsers(Request $request): AnonymousResourceCollection
     {
-        return UserResource::collection($this->userManager->getAgileUsers($request));
+        // Act (Manager)
+        $users = $this->userManager->getAgileUsers(QueryParams::fromRequest($request));
+
+        // Return (Controller)
+        return UserResource::collection($users);
     }
 
     /**

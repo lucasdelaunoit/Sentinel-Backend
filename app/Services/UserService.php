@@ -17,7 +17,6 @@ use App\Models\User;
 use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Http\Request;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -51,16 +50,12 @@ class UserService
      *  Supports search (name/email), department, skill and status filters.
      * </summary>
      *
-     * @param Request $request Pagination, filter, sort & search parameters
+     * @param QueryParams $params Normalized pagination, filter, sort & search parameters
      * @return LengthAwarePaginator Paginated users with department and skills.category
      */
-    public function getAgileUsers(Request $request): LengthAwarePaginator
+    public function getAgileUsers(QueryParams $params): LengthAwarePaginator
     {
-        if ($request->filled('search') && !$request->has('filter.search')) {
-            $request->merge(['filter' => array_merge($request->input('filter', []), ['search' => $request->input('search')])]);
-        }
-
-        return QueryBuilder::for(User::class, $request)
+        return QueryBuilder::for(User::class, $params->toRequest())
             ->with(['department', 'skills.category'])
             ->allowedFilters([
                 AllowedFilter::callback('search', function ($query, $value) {
@@ -103,8 +98,8 @@ class UserService
                 AllowedSort::field('title'),
                 AllowedSort::field('created_at'),
             ])
-            ->paginate($request->integer('per_page', 20))
-            ->appends($request->query());
+            ->paginate($params->perPage())
+            ->appends($params->rawQuery());
     }
 
     /**
