@@ -37,7 +37,9 @@ class BusFactorCalculator
 
     /**
      * <summary>
-     *  CORE math. Min covered count across required skills. 0 when any required skill is uncovered.
+     *  CORE math. Min covering count across required skills. 0 when any required skill has no
+     *  available owner (the project is already critically impacted with zero departures) or when
+     *  there are no requirements.
      * </summary>
      *
      * @param array $coverageMatrix Output of SkillCoverageService::getCoverage
@@ -45,14 +47,14 @@ class BusFactorCalculator
      */
     private function calculateCore(array $coverageMatrix): int
     {
-        $coveredCounts = [];
+        if ($coverageMatrix === []) return 0;
+
+        $min = PHP_INT_MAX;
         foreach ($coverageMatrix as $row) {
-            $c = count($row['employees']);
-            if ($c > 0) $coveredCounts[] = $c;
+            $min = min($min, count($row['employees']));
         }
 
-        if ($coveredCounts === []) return 0;
-        return min($coveredCounts);
+        return $min;
     }
 
     /* ════════════════ LAYER 1 · RAW — matrix → value (no DB writes) ════════════════ */

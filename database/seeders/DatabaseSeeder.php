@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 
 class DatabaseSeeder extends Seeder
 {
@@ -20,5 +21,8 @@ class DatabaseSeeder extends Seeder
             ProjectSkillReqSeeder::class,
             AbsenceSeeder::class,
         ]);
+
+        Artisan::call('sentinel:recalc-everything');
+        $this->command?->info(Artisan::output());
     }
 }

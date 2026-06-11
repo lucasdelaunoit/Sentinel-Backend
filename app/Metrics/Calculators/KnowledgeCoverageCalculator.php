@@ -11,7 +11,9 @@ use App\Models\Project;
 use App\Services\SkillCoverageService;
 
 /**
- * Knowledge-coverage metric — % of required skills with status 'safe' (siloed / uncovered count against).
+ * Knowledge-coverage metric — % of required skills with at least one available owner
+ * (safe + siloed; only 'uncovered' counts against). Silo fragility is captured by the
+ * bus-factor / fragility metrics, not by coverage.
  *
  * Scopes:
  *  - forProject — per-project %. Persists projects.knowledge_coverage_raw + snapshot.
@@ -26,22 +28,22 @@ class KnowledgeCoverageCalculator
 
     /**
      * <summary>
-     *  CORE math. Safe count over total required skills. Returns 100.0 when total == 0.
+     *  CORE math. Covered count over total required skills. Returns 100.0 when total == 0.
      * </summary>
      *
-     * @param int $safe
+     * @param int $covered
      * @param int $total
      * @return float
      */
-    private function calculateCore(int $safe, int $total): float
+    private function calculateCore(int $covered, int $total): float
     {
         if ($total === 0) return 100.0;
-        return ($safe / $total) * 100;
+        return ($covered / $total) * 100;
     }
 
     /**
      * <summary>
-     *  Pure raw % safe for a project.
+     *  Pure raw % covered for a project.
      * </summary>
      *
      * @param Project $project
@@ -53,11 +55,11 @@ class KnowledgeCoverageCalculator
         // Horizon 0 — baseline reflects today's availability; upcoming absences are projection inputs.
         $matrix = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
         $total = count($matrix);
-        $safe = 0;
+        $covered = 0;
         foreach ($matrix as $row) {
-            if ($row['status'] === 'safe') $safe++;
+            if ($row['status'] !== 'uncovered') $covered++;
         }
-        return $this->calculateCore($safe, $total);
+        return $this->calculateCore($covered, $total);
     }
 
     /**
@@ -73,7 +75,7 @@ class KnowledgeCoverageCalculator
     public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
     {
         $raw = (int) round($this->computeRawForProject($project, $absentUserIds));
-        $stat = Stat::display("{$raw}%", $raw, KnowledgeCoverageScale::fromRaw($raw), "{$raw}% safe");
+        $stat = Stat::display("{$raw}%", $raw, KnowledgeCoverageScale::fromRaw($raw), "{$raw}% covered");
 
         return $this->metricsManager->persistProjectMetric($project, 'knowledge_coverage_raw', MetricKey::KnowledgeCoverage, $stat);
     }
@@ -94,18 +96,18 @@ class KnowledgeCoverageCalculator
             ->get();
 
         $total = 0;
-        $safe = 0;
+        $covered = 0;
         foreach ($projects as $project) {
             foreach ($this->coverage->getCoverage($project, [], [], 0) as $skill) {
                 $total++;
-                if ($skill['status'] === 'safe') $safe++;
+                if ($skill['status'] !== 'uncovered') $covered++;
             }
         }
 
-        $pct = (int) round($this->calculateCore($safe, $total));
-        $underCovered = $total - $safe;
-        $insight = $underCovered > 0
-            ? "{$underCovered} skill" . ($underCovered > 1 ? 's' : '') . ' under-covered'
+        $pct = (int) round($this->calculateCore($covered, $total));
+        $uncoveredCount = $total - $covered;
+        $insight = $uncoveredCount > 0
+            ? "{$uncoveredCount} skill" . ($uncoveredCount > 1 ? 's' : '') . ' uncovered'
             : 'All skills covered';
 
         $stat = Stat::display("{$pct}%", $pct, KnowledgeCoverageScale::fromRaw($pct), $insight);

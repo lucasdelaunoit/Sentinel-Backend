@@ -132,8 +132,10 @@ class PlanningSimulationService
 
     private function computeProjectImpact(Project $project, array $absentUserIds, array $absences, array &$skillAgg): array
     {
-        $matrixBefore = $this->coverage->getCoverage($project, [], $absentUserIds);
-        $matrixAfter  = $this->coverage->getCoverage($project, $absentUserIds);
+        // Horizon 0 on both matrices — same availability window as the bus factor / fragility
+        // computed below, so the three metrics in one impact row agree on who counts as present.
+        $matrixBefore = $this->coverage->getCoverage($project, [], $absentUserIds, 0);
+        $matrixAfter  = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
 
         $uncovered = 0;
         $siloed    = 0;
@@ -196,9 +198,9 @@ class PlanningSimulationService
         }
 
         $totalReqs = $uncovered + $siloed + $safe;
-        $safeBefore = 0;
+        $coveredBefore = 0;
         foreach ($matrixBefore as $rowBefore) {
-            if (($rowBefore['status'] ?? null) === 'safe') $safeBefore++;
+            if (($rowBefore['status'] ?? null) !== 'uncovered') $coveredBefore++;
         }
         $reqsBefore = count($matrixBefore);
         $severity  = $uncovered > 0 ? 'critical' : ($siloed > 0 ? 'warning' : 'ok');
@@ -209,8 +211,10 @@ class PlanningSimulationService
         // After = recompute live with the simulated absent roster.
         $busBefore  = (int) $project->bus_factor;
         $busAfter   = $this->busFactor->computeRawForProject($project, $absentUserIds);
-        $covBefore  = $reqsBefore === 0 ? 100 : (int) round(($safeBefore / $reqsBefore) * 100);
-        $covAfter   = $totalReqs === 0 ? 100 : (int) round(($safe / $totalReqs) * 100);
+        // Covered = at least one available owner (safe + siloed). Silo fragility is bus
+        // factor / fragility's job — counting siloed skills as 0% coverage double-penalizes.
+        $covBefore  = $reqsBefore === 0 ? 100 : (int) round(($coveredBefore / $reqsBefore) * 100);
+        $covAfter   = $totalReqs === 0 ? 100 : (int) round((($safe + $siloed) / $totalReqs) * 100);
         $riskBefore = (int) round((float) $project->fragility_raw);
         $riskAfter  = (int) round($this->fragility->computeRawForProject($project, $absentUserIds));
 
