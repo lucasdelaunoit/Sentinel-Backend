@@ -10,6 +10,7 @@ use App\Metrics\Calculators\KnowledgeCoverageCalculator;
 use App\Metrics\Calculators\TeamAvailabilityCalculator;
 use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Scales\KnowledgeCoverageScale;
+use App\Metrics\Severity;
 use App\Models\Absence;
 use App\Models\Project;
 use App\Services\AbsenceService;
@@ -337,39 +338,39 @@ class DashboardManager
      * <summary>
      *  Severity for a single affected project, driven by org thresholds.
      *  critical: a skill goes uncovered or bus factor drops to a single holder.
-     *  high: bus factor falls below the critical threshold, or a skill becomes siloed.
-     *  medium: some coverage is lost but no skill is fully exposed. low: otherwise.
+     *  warning: bus factor falls below the critical threshold, or some coverage is lost.
+     *  ok: otherwise.
      * </summary>
      *
      * @param int $busAfter Bus factor after the absence
      * @param array<int, string> $lostSkills Skills degraded by the absence
      * @param int $criticalBusThreshold OrganizationSetting.critical_bus_factor_threshold
-     * @return string critical|high|medium|low
+     * @return string Severity enum value (ok|warning|critical)
      */
     private function resolveProjectSeverity(int $busAfter, array $lostSkills, int $criticalBusThreshold): string
     {
         if ($busAfter <= 1) {
-            return 'critical';
+            return Severity::CRITICAL->value;
         }
-        if ($busAfter < $criticalBusThreshold) {
-            return 'high';
+        if ($busAfter < $criticalBusThreshold || $lostSkills !== []) {
+            return Severity::WARNING->value;
         }
-        return $lostSkills === [] ? 'low' : 'medium';
+        return Severity::OK->value;
     }
 
     /**
      * <summary>
-     *  Fold per-project severities into one event severity — the worst project wins. low when the
+     *  Fold per-project severities into one event severity — the worst project wins. ok when the
      *  absence affects no project.
      * </summary>
      *
      * @param array<int, array<string, mixed>> $affectedProjects Impact rows (each with a 'severity' key)
-     * @return string critical|high|medium|low
+     * @return string Severity enum value (ok|warning|critical)
      */
     private function resolveEventSeverity(array $affectedProjects): string
     {
-        $order = ['low' => 0, 'medium' => 1, 'high' => 2, 'critical' => 3];
-        $worst = 'low';
+        $order = [Severity::OK->value => 0, Severity::WARNING->value => 1, Severity::CRITICAL->value => 2];
+        $worst = Severity::OK->value;
         foreach ($affectedProjects as $project) {
             if ($order[$project['severity']] > $order[$worst]) {
                 $worst = $project['severity'];

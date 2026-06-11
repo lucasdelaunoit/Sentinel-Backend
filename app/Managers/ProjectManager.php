@@ -245,10 +245,10 @@ class ProjectManager
      */
     public function getProjectMetrics(Project $project): array
     {
-        $fragilityRaw = $this->fragilityCalculator->calculate($project);
+        $fragilityRaw = (int) round($this->fragilityCalculator->computeRawForProject($project));
 
         return [
-            'bus_factor' => $this->busFactorCalculator->calculate($project),
+            'bus_factor' => $this->busFactorCalculator->computeRawForProject($project),
             'fragility_raw' => $fragilityRaw,
             'fragility' => FragilityScale::fromRaw($fragilityRaw)->value,
             'redundancy' => $this->coverageService->getRedundancy($project),
@@ -491,7 +491,7 @@ class ProjectManager
      * <summary>
      *  Per-project fragility-alert feed — prioritized decision-support alerts derived from the
      *  coverage matrix and cached project state (bus factor, active absences, silos, uncovered
-     *  skills, trajectory, deadline).
+     *  skills, deadline).
      * </summary>
      *
      * @param Project $project Target project

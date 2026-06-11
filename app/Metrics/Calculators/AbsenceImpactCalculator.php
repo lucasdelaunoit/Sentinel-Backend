@@ -63,8 +63,9 @@ class AbsenceImpactCalculator
     {
         if (empty($absentUserIds)) return 0;
 
-        $baseline = $this->coverage->getCoverage($project);
-        $withAbsence = $this->coverage->getCoverage($project, $absentUserIds);
+        // Horizon 0 — the roster carries the absences; a horizon baseline would hide their impact.
+        $baseline = $this->coverage->getCoverage($project, [], [], 0);
+        $withAbsence = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
 
         return $this->calculateCore($baseline, $withAbsence);
     }
@@ -120,8 +121,8 @@ class AbsenceImpactCalculator
 
         $count = 0;
         foreach ($projects as $project) {
-            $baseline = $this->coverage->getCoverage($project);
-            $withAbsence = $this->coverage->getCoverageAfterAbsence($project, $absentUserIds);
+            $baseline = $this->coverage->getCoverage($project, [], [], 0);
+            $withAbsence = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
             $count += $this->calculateCore($baseline, $withAbsence);
         }
 

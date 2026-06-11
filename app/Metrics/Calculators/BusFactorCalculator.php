@@ -70,7 +70,8 @@ class BusFactorCalculator
      */
     public function computeRawForProject(Project $project, array $absentUserIds = [], array $presentUserIds = []): int
     {
-        return $this->calculateCore($this->coverage->getCoverage($project, $absentUserIds, $presentUserIds));
+        // Horizon 0 — baseline reflects today's availability; upcoming absences are projection inputs.
+        return $this->calculateCore($this->coverage->getCoverage($project, $absentUserIds, $presentUserIds, 0));
     }
 
     /**

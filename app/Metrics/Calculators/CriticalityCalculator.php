@@ -65,7 +65,7 @@ class CriticalityCalculator
         foreach ($user->projects as $project) {
             if ($project->archived_at !== null || $project->completed_at !== null) continue;
 
-            $matrix = $this->coverage->getCoverage($project);
+            $matrix = $this->coverage->getCoverage($project, [], [], 0);
 
             $smallest = PHP_INT_MAX;
             foreach ($matrix as $row) {

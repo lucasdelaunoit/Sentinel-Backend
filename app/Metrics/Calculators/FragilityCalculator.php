@@ -100,7 +100,8 @@ class FragilityCalculator
     public function computeRawForProject(Project $project, array $absentUserIds = [], array $presentUserIds = []): float
     {
         $settings = $this->orgSettings->getOrganizationSetting();
-        $matrix = $this->coverage->getCoverage($project, $absentUserIds, $presentUserIds);
+        // Horizon 0 — baseline reflects today's availability; horizon absences feed absence_impact below.
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds, $presentUserIds, 0);
         $total = count($matrix);
 
         if ($total === 0) return 0.0;
@@ -136,7 +137,8 @@ class FragilityCalculator
 
         if ($merged === $absentUserIds) return 0.0;
 
-        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds);
+        // Horizon absences arrive via $merged — keep the matrix itself at horizon 0.
+        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds, 0);
         $newlyUncovered = 0;
         foreach ($with as $sid => $row) {
             if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {

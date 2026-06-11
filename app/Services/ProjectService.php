@@ -151,7 +151,7 @@ class ProjectService
         return Stat::fromScale(FragilityScale::fromRaw($raw), $raw, "Score: {$raw}/100");
     }
 
-/**
+    /**
      * <summary>
      *  Team-availability Stat for one project — reads precomputed projects.team_availability_raw (% available).
      * </summary>
@@ -958,8 +958,8 @@ class ProjectService
      * <summary>
      *  Fragility-alert feed for a project. Derives a prioritized list of decision-support alerts
      *  purely from the knowledge-coverage matrix and the project's cached state — bus factor,
-     *  active absences and the skills they expose, knowledge silos, uncovered skills, fragility
-     *  trajectory and an overdue deadline. Read-only. Each alert is
+     *  active absences and the skills they expose, knowledge silos, uncovered skills and an
+     *  overdue deadline. Read-only. Each alert is
      *  { id, severity (critical|warning|info), category, title, detail }.
      * </summary>
      *
@@ -1054,26 +1054,6 @@ class ProjectService
                 'category' => 'Uncovered Skill',
                 'title' => "\"{$row['skill']['name']}\" is not actively covered",
                 'detail' => 'This required skill has no available holder on the team. Assign someone or recruit.',
-            ];
-        }
-
-        // Fragility trajectory (health = 100 - fragility_raw)
-        $health = 100 - (int) $project->fragility_raw;
-        if ($health < 50) {
-            $alerts[] = [
-                'id' => 'trajectory',
-                'severity' => 'critical',
-                'category' => 'Project Trajectory',
-                'title' => "Project trajectory is critical ({$health}/100)",
-                'detail' => 'Multiple risk factors are combining. Immediate manager intervention recommended.',
-            ];
-        } elseif ($health < 65) {
-            $alerts[] = [
-                'id' => 'trajectory',
-                'severity' => 'warning',
-                'category' => 'Project Trajectory',
-                'title' => "Project trajectory is degraded ({$health}/100)",
-                'detail' => 'Risk factors are accumulating. Monitor closely and address knowledge silos.',
             ];
         }
 

@@ -199,7 +199,7 @@ class SkillCoverageService
     public function getRedundancy(Project $project): array
     {
         $out = [];
-        foreach ($this->getCoverage($project) as $skillId => $row) {
+        foreach ($this->getCoverage($project, [], [], 0) as $skillId => $row) {
             $out[$skillId] = count($row['employees']);
         }
         return $out;

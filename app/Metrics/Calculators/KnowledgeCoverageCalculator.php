@@ -50,7 +50,8 @@ class KnowledgeCoverageCalculator
      */
     public function computeRawForProject(Project $project, array $absentUserIds = []): float
     {
-        $matrix = $this->coverage->getCoverage($project, $absentUserIds);
+        // Horizon 0 — baseline reflects today's availability; upcoming absences are projection inputs.
+        $matrix = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
         $total = count($matrix);
         $safe = 0;
         foreach ($matrix as $row) {
@@ -95,7 +96,7 @@ class KnowledgeCoverageCalculator
         $total = 0;
         $safe = 0;
         foreach ($projects as $project) {
-            foreach ($this->coverage->getCoverage($project) as $skill) {
+            foreach ($this->coverage->getCoverage($project, [], [], 0) as $skill) {
                 $total++;
                 if ($skill['status'] === 'safe') $safe++;
             }
