@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Absence;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 /**
  * <summary>
@@ -18,7 +17,16 @@ class PlanningService
 {
     /* ─────────────────────── Month payload ─────────────────────── */
 
-    public function getMonth(string $month): array
+    /**
+     * <summary>
+     *  Build the month roster payload for the Gantt view: every user with their absences
+     *  overlapping the month, plus today's capacity when the requested month is the current one.
+     * </summary>
+     *
+     * @param string $month Target month in YYYY-MM format
+     * @return array{month: string, users: array, capacity_today: array|null} Month payload
+     */
+    public function getPlanningMonth(string $month): array
     {
         [$year, $monthNum] = $this->parseMonth($month);
         $monthStart = Carbon::create($year, $monthNum, 1);
@@ -72,24 +80,29 @@ class PlanningService
 
     /* ─────────────────────── Apply scenario ─────────────────────── */
 
-    public function apply(array $absences): array
+    /**
+     * <summary>
+     *  Persist a batch of simulated absences as real Absence rows. Single-entity bulk insert —
+     *  the caller (Manager) owns the surrounding transaction and any recalculation dispatch.
+     * </summary>
+     *
+     * @param array<int, array<string, mixed>> $absences Validated absence payloads (user_id, start_date, end_date, type?, reason?)
+     * @return array<int, int> Ids of the created absences
+     */
+    public function applyPlanning(array $absences): array
     {
-        $created = DB::transaction(function () use ($absences) {
-            $ids = [];
-            foreach ($absences as $a) {
-                $abs = Absence::create([
-                    'user_id'    => (int) $a['user_id'],
-                    'start_date' => $a['start_date'],
-                    'end_date'   => $a['end_date'],
-                    'type'       => $a['type'] ?? 'planned',
-                    'reason'     => $a['reason'] ?? null,
-                ]);
-                $ids[] = $abs->id;
-            }
-            return $ids;
-        });
-
-        return ['applied' => count($created), 'created_ids' => $created];
+        $ids = [];
+        foreach ($absences as $a) {
+            $abs = Absence::create([
+                'user_id' => (int) $a['user_id'],
+                'start_date' => $a['start_date'],
+                'end_date' => $a['end_date'],
+                'type' => $a['type'] ?? 'planned',
+                'reason' => $a['reason'] ?? null,
+            ]);
+            $ids[] = $abs->id;
+        }
+        return $ids;
     }
 
     /* ─────────────────────── helpers ─────────────────────── */

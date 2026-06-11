@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Services\AbsenceService;
 use App\Support\QueryParams;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class AbsenceManager
 {
@@ -38,10 +40,11 @@ class AbsenceManager
      * @param User $user Target user the absence belongs to
      * @param array<string, mixed> $data Validated payload: start_date, end_date, type?, reason?
      * @return Absence Newly created absence
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
     public function createAbsenceForUser(User $user, array $data): Absence
     {
-        $absence = $this->absenceService->createAbsenceForUser($user, $data);
+        $absence = DB::transaction(fn() => $this->absenceService->createAbsenceForUser($user, $data));
         $this->dispatchProjectRecalculations($user);
         return $absence;
     }
@@ -54,10 +57,11 @@ class AbsenceManager
      * @param Absence $absence Target absence
      * @param array<string, mixed> $data Validated payload (all fields optional)
      * @return Absence Refreshed absence
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
     public function updateAbsence(Absence $absence, array $data): Absence
     {
-        $fresh = $this->absenceService->updateAbsence($absence, $data);
+        $fresh = DB::transaction(fn() => $this->absenceService->updateAbsence($absence, $data));
         $this->dispatchProjectRecalculations($fresh->user);
         return $fresh;
     }
@@ -69,11 +73,12 @@ class AbsenceManager
      *
      * @param Absence $absence Target absence to soft-delete
      * @return void
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
      */
     public function deleteAbsence(Absence $absence): void
     {
         $user = $absence->user;
-        $this->absenceService->deleteAbsence($absence);
+        DB::transaction(fn() => $this->absenceService->deleteAbsence($absence));
         if ($user) $this->dispatchProjectRecalculations($user);
     }
 

@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Support\QueryParams;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -42,6 +43,20 @@ class UserService
         $snap = $this->snapshotService->latestFor(MetricScope::Org, null, $metric);
 
         return $snap !== null ? Stat::fromSnapshot($snap) : Stat::placeholder();
+    }
+
+    /**
+     * <summary>
+     *  Retrieve users matching the given ids with their projects eager-loaded.
+     *  Used by Managers that fan out per-project recalculation dispatch.
+     * </summary>
+     *
+     * @param array<int> $userIds Ids of the users to load
+     * @return Collection<int, User> Users with projects loaded
+     */
+    public function getUsersWithProjectsByIds(array $userIds): Collection
+    {
+        return User::query()->with('projects')->whereIn('id', $userIds)->get();
     }
 
     /**

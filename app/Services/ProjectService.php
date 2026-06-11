@@ -21,6 +21,7 @@ use App\Support\QueryParams;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\AllowedSort;
 use Spatie\QueryBuilder\QueryBuilder;
@@ -52,6 +53,19 @@ class ProjectService
             'avg_fragility' => (float) ($projects->avg('fragility_raw') ?? 0),
             'avg_knowledge_coverage' => (float) ($projects->avg('knowledge_coverage_raw') ?? 0),
         ];
+    }
+
+    /**
+     * <summary>
+     *  Retrieve every non-archived Project (id column only). Used by callers that need
+     *  to fan out per-project work such as risk recalculation dispatch.
+     * </summary>
+     *
+     * @return Collection<int, Project> Non-archived projects with only id loaded
+     */
+    public function getNonArchivedProjects(): Collection
+    {
+        return Project::query()->whereNull('archived_at')->get(['id']);
     }
 
     /**

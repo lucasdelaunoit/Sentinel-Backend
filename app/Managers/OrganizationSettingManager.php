@@ -6,6 +6,7 @@ use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\OrganizationSetting;
 use App\Models\Project;
 use App\Services\OrganizationSettingService;
+use App\Services\ProjectService;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -13,6 +14,7 @@ class OrganizationSettingManager
 {
     public function __construct(
         private readonly OrganizationSettingService $organizationSettingService,
+        private readonly ProjectService $projectService,
     ) {}
 
     /**
@@ -40,7 +42,7 @@ class OrganizationSettingManager
     {
         $setting = DB::transaction(fn() => $this->organizationSettingService->updateOrganizationSetting($data));
 
-        Project::query()->whereNull('archived_at')->get(['id'])->each(
+        $this->projectService->getNonArchivedProjects()->each(
             fn(Project $p) => RecalculateProjectRiskJob::dispatch($p)
         );
 

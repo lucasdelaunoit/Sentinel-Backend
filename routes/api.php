@@ -100,9 +100,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/{user}/absences', [AbsenceController::class, 'createAbsenceForUser']);
 
     /** ---------------------- [ PLANNING ] ---------------------- */
-    Route::get('/planning', [PlanningController::class, 'index']);
-    Route::post('/planning/simulate', [PlanningController::class, 'simulate']);
-    Route::post('/planning/apply', [PlanningController::class, 'apply']);
+    Route::get('/planning', [PlanningController::class, 'getPlanningMonth']);
+    Route::post('/planning/simulate', [PlanningController::class, 'simulatePlanning']);
+    Route::post('/planning/apply', [PlanningController::class, 'applyPlanning']);
 
     /* ----------------- DERIVED METRICS (not settings) ----------------- */
     Route::get('/skill-categories/{skillCategory}/kci', [SkillCategoryController::class, 'getKCI']);
