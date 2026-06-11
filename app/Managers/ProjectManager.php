@@ -477,14 +477,16 @@ class ProjectManager
     /**
      * <summary>
      *  Per-project competency radar — one row per SkillCategory with value (0–100) and target.
+     *  Scope 'required' limits axes to the categories of the project's required skills.
      * </summary>
      *
      * @param Project $project Target project
+     * @param string $scope 'all' or 'required'
      * @return array Radar rows keyed numerically
      */
-    public function getProjectCompetencyRadar(Project $project): array
+    public function getProjectCompetencyRadar(Project $project, string $scope = 'all'): array
     {
-        return $this->projectService->getProjectCompetencyRadar($project);
+        return $this->projectService->getProjectCompetencyRadar($project, $scope);
     }
 
     /**

@@ -1077,22 +1077,55 @@ class ProjectService
 
     /**
      * <summary>
-     *  Competency radar for a project. One axis per SkillCategory in the DB (stable order by name).
-     *  value = round(avg(level) / 5 * 100) over all EmployeeSkill rows of the team where the skill
-     *  belongs to the category. Categories with no held skill in the team return 0. target is fixed
-     *  at 80 for now (no setting wired yet). Read-only.
+     *  Competency radar for a project. One axis per SkillCategory (stable order by name).
+     *  Scope 'all' uses every SkillCategory in the DB and averages over every EmployeeSkill row
+     *  of the team in the category. Scope 'required' restricts axes to the distinct categories of
+     *  the project's required skills and scores per required skill first (best-effort team average
+     *  of holders, 0 when nobody holds it), then averages those per-skill scores per category — an
+     *  uncovered required skill drags its axis down instead of being masked by unrelated team
+     *  skills. target is fixed at 80 for now (no setting wired yet). Read-only.
      * </summary>
      *
      * @param Project $project Target project
+     * @param string $scope 'all' (every category) or 'required' (required skills only)
      * @return array<int, array{category:string, value:int, target:int}>
      */
-    public function getProjectCompetencyRadar(Project $project): array
+    public function getProjectCompetencyRadar(Project $project, string $scope = 'all'): array
     {
         $project->loadMissing(['users.skills.category']);
 
-        $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
-        $skills = $project->users->flatMap(fn(User $user) => $user->skills);
+        if ($scope !== 'required') {
+            $categories = SkillCategory::query()->orderBy('name')->get(['id', 'name']);
+            $skills = $project->users->flatMap(fn(User $user) => $user->skills);
 
-        return CompetencyRadar::build($categories, $skills);
+            return CompetencyRadar::build($categories, $skills);
+        }
+
+        $required = $project->skillRequirements()->get(['skills.id', 'skills.skill_category_id']);
+        $categories = SkillCategory::query()
+            ->whereIn('id', $required->pluck('skill_category_id')->unique())
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        // Levels held by the team, grouped per required skill id.
+        $heldLevels = $project->users
+            ->flatMap(fn(User $user) => $user->skills)
+            ->groupBy('id')
+            ->map(fn($rows) => $rows->avg(fn($skill) => (int) $skill->pivot->level));
+
+        $rows = [];
+        foreach ($categories as $category) {
+            $scores = $required
+                ->where('skill_category_id', $category->id)
+                ->map(fn($skill) => ($heldLevels[$skill->id] ?? 0) / 5 * 100);
+
+            $rows[] = [
+                'category' => $category->name,
+                'value' => (int) round($scores->avg() ?? 0),
+                'target' => 80,
+            ];
+        }
+
+        return $rows;
     }
 }

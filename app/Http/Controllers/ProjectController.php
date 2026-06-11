@@ -273,15 +273,23 @@ class ProjectController extends Controller
     /**
      * <summary>
      *  Retrieve the competency-radar series (per SkillCategory) for a project.
+     *  Optional ?scope=required restricts axes to the categories of the project's required skills.
      * </summary>
      *
+     * @param Request $request Current HTTP request (optional 'scope' query param: all|required)
      * @param Project $project Route-model bound project
      * @return JsonResponse Radar rows wrapped in { data: [...] }
      */
-    public function getProjectCompetencyRadar(Project $project): JsonResponse
+    public function getProjectCompetencyRadar(Request $request, Project $project): JsonResponse
     {
+        // Validate (Controller)
+        $scope = $request->query('scope', 'all');
+        if (!in_array($scope, ['all', 'required'], true)) {
+            $scope = 'all';
+        }
+
         // Act (Manager)
-        $rows = $this->projectManager->getProjectCompetencyRadar($project);
+        $rows = $this->projectManager->getProjectCompetencyRadar($project, $scope);
 
         // Return (Controller)
         return response()->json(['data' => $rows]);
