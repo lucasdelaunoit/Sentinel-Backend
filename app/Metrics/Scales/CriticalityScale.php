@@ -10,8 +10,8 @@ use App\Metrics\Severity;
  */
 enum CriticalityScale: string implements Scale
 {
-    case LowRisk  = 'low_risk';
-    case Notable  = 'notable';
+    case LowRisk = 'low_risk';
+    case Notable = 'notable';
     case Critical = 'critical';
 
     public static function fromRaw(int $score): self
@@ -19,15 +19,15 @@ enum CriticalityScale: string implements Scale
         return match (true) {
             $score >= 60 => self::Critical,
             $score >= 30 => self::Notable,
-            default      => self::LowRisk,
+            default => self::LowRisk,
         };
     }
 
     public function label(): string
     {
         return match ($this) {
-            self::LowRisk  => 'Low Risk',
-            self::Notable  => 'Notable',
+            self::LowRisk => 'Low Risk',
+            self::Notable => 'Notable',
             self::Critical => 'Critical',
         };
     }
@@ -35,8 +35,8 @@ enum CriticalityScale: string implements Scale
     public function severity(): Severity
     {
         return match ($this) {
-            self::LowRisk  => Severity::OK,
-            self::Notable  => Severity::WARNING,
+            self::LowRisk => Severity::OK,
+            self::Notable => Severity::WARNING,
             self::Critical => Severity::CRITICAL,
         };
     }

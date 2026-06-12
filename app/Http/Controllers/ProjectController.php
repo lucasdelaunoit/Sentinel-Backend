@@ -323,7 +323,7 @@ class ProjectController extends Controller
      */
     public function getProjectCompetencyRadar(Request $request, Project $project): JsonResponse
     {
-        // Validate (Controller)
+        // Validate & authorize (Controller)
         $scope = $request->query('scope', 'all');
         if (!in_array($scope, ['all', 'required'], true)) {
             $scope = 'all';

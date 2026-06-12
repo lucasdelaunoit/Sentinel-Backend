@@ -31,11 +31,11 @@ class SkillController extends Controller
      */
     public function getAgileSkillsForUser(Request $request, User $user): LengthAwarePaginator
     {
-        // Validate & authorize (Controller)
-        $queryParams = QueryParams::fromRequest($request);
-
         // Act (Manager)
-        return $this->skillManager->getAgileSkillsForUser($queryParams, $user);
+        $skills = $this->skillManager->getAgileSkillsForUser(QueryParams::fromRequest($request), $user);
+
+        // Return (Controller)
+        return $skills;
     }
 
     /**
@@ -48,11 +48,8 @@ class SkillController extends Controller
      */
     public function getAgileSkills(Request $request): AnonymousResourceCollection
     {
-        // Validate & authorize (Controller)
-        $queryParams = QueryParams::fromRequest($request);
-
         // Act (Manager)
-        $skills = $this->skillManager->getAgileSkills($queryParams);
+        $skills = $this->skillManager->getAgileSkills(QueryParams::fromRequest($request));
 
         // Return (Controller)
         return SkillResource::collection($skills);

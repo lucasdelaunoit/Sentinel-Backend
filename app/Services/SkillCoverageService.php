@@ -37,11 +37,11 @@ class SkillCoverageService
     {
         $project->loadMissing(['skillRequirements', 'users.skills', 'users.absences']);
 
-        $settings      = $this->orgSettings->getOrganizationSetting();
+        $settings = $this->orgSettings->getOrganizationSetting();
         $siloThreshold = (int) $settings->silo_threshold;
-        $horizonDays   = $horizonDays ?? (int) $settings->absence_horizon_days;
+        $horizonDays = $horizonDays ?? (int) $settings->absence_horizon_days;
 
-        $today      = Carbon::today();
+        $today = Carbon::today();
         $horizonEnd = (clone $today)->addDays($horizonDays);
 
         $availableUsers = $project->users->reject(function ($user) use ($absentUserIds, $presentUserIds, $today, $horizonEnd) {
@@ -53,7 +53,7 @@ class SkillCoverageService
             }
             return $user->absences->contains(function ($a) use ($today, $horizonEnd) {
                 $start = Carbon::parse($a->start_date);
-                $end   = Carbon::parse($a->end_date);
+                $end = Carbon::parse($a->end_date);
                 return $start->lte($horizonEnd) && $end->gte($today);
             });
         });
@@ -68,23 +68,23 @@ class SkillCoverageService
                 if ($userSkill && (int) $userSkill->pivot->level >= $required) {
                     $covering[] = [
                         'user_id' => $user->id,
-                        'name'    => trim(($user->firstname ?? '') . ' ' . ($user->lastname ?? '')) ?: $user->email,
-                        'level'   => (int) $userSkill->pivot->level,
+                        'name' => trim(($user->firstname ?? '') . ' ' . ($user->lastname ?? '')) ?: $user->email,
+                        'level' => (int) $userSkill->pivot->level,
                     ];
                 }
             }
 
-            $count  = count($covering);
+            $count = count($covering);
             $status = $count === 0
                 ? 'uncovered'
                 : ($count <= $siloThreshold ? 'siloed' : 'safe');
 
             $matrix[$skill->id] = [
-                'skill_id'       => $skill->id,
-                'skill_name'     => $skill->name,
+                'skill_id' => $skill->id,
+                'skill_name' => $skill->name,
                 'required_level' => $required,
-                'employees'      => $covering,
-                'status'         => $status,
+                'employees' => $covering,
+                'status' => $status,
             ];
         }
 

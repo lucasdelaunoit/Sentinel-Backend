@@ -22,11 +22,11 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // Auth
+    /** ---------------------- [ AUTH ] ---------------------- */
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'getAuthenticatedUser']);
 
-    // Dashboard
+    /** ---------------------- [ DASHBOARD ] ---------------------- */
     Route::get('/dashboard/stats', [DashboardController::class, 'getDashboardStats']);
     Route::get('/dashboard/knowledge-coverage', [DashboardController::class, 'getKnowledgeCoverage']);
     Route::get('/dashboard/upcoming-risk-events', [DashboardController::class, 'getUpcomingRiskEvents']);
@@ -149,6 +149,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/skills', [SkillController::class, 'getAgileSkills']);
         Route::post('/skills', [SkillController::class, 'createSkill']);
         Route::patch('/skills/{skill}', [SkillController::class, 'updateSkill']);
-        Route::delete('/skills/{skill}',[SkillController::class, 'deleteSkill']);
+        Route::delete('/skills/{skill}', [SkillController::class, 'deleteSkill']);
     });
 });

@@ -6,6 +6,7 @@ use App\Managers\MetricsManager;
 use App\Metrics\Scales\BusFactorScale;
 use App\Metrics\Snapshots\MetricKey;
 use App\Metrics\Snapshots\MetricSnapshot;
+use App\Metrics\Severity;
 use App\Metrics\Stat;
 use App\Models\Project;
 use App\Models\User;
@@ -114,11 +115,11 @@ class BusFactorCalculator
      */
     public function forProject(Project $project, array $absentUserIds = []): MetricSnapshot
     {
-        $bf = $this->computeRawForProject($project, $absentUserIds);
+        $busFactor = $this->computeRawForProject($project, $absentUserIds);
         $stat = Stat::fromScale(
-            BusFactorScale::fromCount($bf),
-            $bf,
-            $bf > 0 ? "{$bf} key " . ($bf === 1 ? 'person' : 'people') : 'No coverage',
+            BusFactorScale::fromCount($busFactor),
+            $busFactor,
+            $busFactor > 0 ? "{$busFactor} key " . ($busFactor === 1 ? 'person' : 'people') : 'No coverage',
         );
 
         return $this->metricsManager->persistProjectMetric($project, 'bus_factor', MetricKey::BusFactor, $stat);
@@ -139,7 +140,7 @@ class BusFactorCalculator
         $stat = new Stat(
             value: $count === 0 ? 'Safe' : (string) $count,
             valueRaw: $count,
-            severity: $count > 0 ? \App\Metrics\Severity::CRITICAL : \App\Metrics\Severity::OK,
+            severity: $count > 0 ? Severity::CRITICAL : Severity::OK,
             insight: $count > 0
                 ? "{$count} project" . ($count > 1 ? 's' : '') . ' at risk'
                 : 'No single-point exposure',

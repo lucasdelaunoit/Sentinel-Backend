@@ -14,9 +14,9 @@ class CalendarManager
 {
     public function __construct(
         private readonly OrganizationSettingService $organizationSettingService,
-        private readonly CompanyHolidayService      $companyHolidayService,
-        private readonly CalendarService            $calendarService,
-        private readonly CalendarImpactService      $calendarImpactService,
+        private readonly CompanyHolidayService $companyHolidayService,
+        private readonly CalendarService $calendarService,
+        private readonly CalendarImpactService $calendarImpactService,
     ) {}
 
     /**
@@ -58,26 +58,26 @@ class CalendarManager
      *  Build a calendar summary for a given month — combines settings + holidays + computed counters.
      * </summary>
      *
-     * @param int $year  Full year
+     * @param int $year Full year
      * @param int $month Month 1–12
      * @return array Summary payload consumed by the frontend Calendar tab
      */
     public function getCalendarSummary(int $year, int $month): array
     {
-        $setting   = $this->organizationSettingService->getOrganizationSetting();
-        $holidays  = $this->companyHolidayService->getCompanyHolidaysForMonth($year, $month);
-        $preview   = $this->calendarService->buildMonthPreview($year, $month, $setting, $holidays);
-        $working   = $this->calendarService->countWorkingDays($year, $month, $setting, $holidays);
-        $perWeek   = (int) array_sum($setting->working_days ?? [1, 1, 1, 1, 1, 0, 0]);
+        $setting = $this->organizationSettingService->getOrganizationSetting();
+        $holidays = $this->companyHolidayService->getCompanyHolidaysForMonth($year, $month);
+        $preview = $this->calendarService->buildMonthPreview($year, $month, $setting, $holidays);
+        $working = $this->calendarService->countWorkingDays($year, $month, $setting, $holidays);
+        $perWeek = (int) array_sum($setting->working_days ?? [1, 1, 1, 1, 1, 0, 0]);
 
         return [
-            'year'                  => $year,
-            'month'                 => $month,
-            'working_days'          => $setting->working_days,
+            'year' => $year,
+            'month' => $month,
+            'working_days' => $setting->working_days,
             'working_days_per_week' => $perWeek,
             'working_days_in_month' => $working,
-            'company_holidays'      => $holidays,
-            'preview'               => $preview,
+            'company_holidays' => $holidays,
+            'preview' => $preview,
         ];
     }
 }

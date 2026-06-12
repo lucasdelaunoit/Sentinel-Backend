@@ -14,7 +14,7 @@ class QueryParams
     public static function fromRequest(Request $request): self
     {
         $normalized = $request->query();
-        $filters    = $request->input('filter', []);
+        $filters = $request->input('filter', []);
 
         if ($request->filled('search') && empty($filters['search'])) {
             $normalized['filter']['search'] = $request->input('search');

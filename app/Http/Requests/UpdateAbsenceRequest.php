@@ -21,10 +21,10 @@ class UpdateAbsenceRequest extends FormRequest
         return [
             'start_date' => ['sometimes', 'date'],
             'start_half' => ['sometimes', Rule::enum(AbsenceHalf::class)],
-            'end_date'   => ['sometimes', 'date', 'after_or_equal:start_date'],
-            'end_half'   => ['sometimes', Rule::enum(AbsenceHalf::class)],
+            'end_date' => ['sometimes', 'date', 'after_or_equal:start_date'],
+            'end_half' => ['sometimes', Rule::enum(AbsenceHalf::class)],
             'type' => ['sometimes', Rule::enum(AbsenceType::class)],
-            'reason'     => ['nullable', 'string'],
+            'reason' => ['nullable', 'string'],
         ];
     }
 
@@ -39,13 +39,13 @@ class UpdateAbsenceRequest extends FormRequest
             $absence = $this->route('absence');
 
             // Effective values after the patch (fall back to the stored row).
-            $start     = Carbon::parse($this->input('start_date', $absence->start_date))->toDateString();
-            $end       = Carbon::parse($this->input('end_date', $absence->end_date))->toDateString();
+            $start = Carbon::parse($this->input('start_date', $absence->start_date))->toDateString();
+            $end = Carbon::parse($this->input('end_date', $absence->end_date))->toDateString();
             $startHalf = $this->input('start_half', $absence->start_half);
-            $endHalf   = $this->input('end_half', $absence->end_half);
+            $endHalf = $this->input('end_half', $absence->end_half);
 
             $candidateStart = AbsenceSlot::start($start, $startHalf);
-            $candidateEnd   = AbsenceSlot::end($end, $endHalf);
+            $candidateEnd = AbsenceSlot::end($end, $endHalf);
 
             if ($candidateEnd < $candidateStart) {
                 $v->errors()->add('end_date', 'End must be on or after the start, including the half-day.');
@@ -78,7 +78,7 @@ class UpdateAbsenceRequest extends FormRequest
 
             foreach ($candidates as $existing) {
                 $existingStart = AbsenceSlot::start($existing->start_date, $existing->start_half);
-                $existingEnd   = AbsenceSlot::end($existing->end_date, $existing->end_half);
+                $existingEnd = AbsenceSlot::end($existing->end_date, $existing->end_half);
 
                 if (AbsenceSlot::overlaps($candidateStart, $candidateEnd, $existingStart, $existingEnd)) {
                     $v->errors()->add('start_date', 'This absence overlaps with an existing absence for this user.');

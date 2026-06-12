@@ -32,7 +32,7 @@ class PlanningService
     {
         [$year, $monthNum] = $this->parseMonth($month);
         $monthStart = Carbon::create($year, $monthNum, 1);
-        $monthEnd   = (clone $monthStart)->endOfMonth();
+        $monthEnd = (clone $monthStart)->endOfMonth();
 
         $users = User::query()
             ->with(['department', 'absences' => function ($q) use ($monthStart, $monthEnd) {
@@ -45,38 +45,39 @@ class PlanningService
         $isCurrentMonth = Carbon::now()->year === $year && Carbon::now()->month === $monthNum;
 
         return [
-            'month'         => $month,
-            'users'         => $users->map(fn(User $u) => $this->formatUser($u))->all(),
-            'capacity_today' => $isCurrentMonth ? $this->capacityToday($todayStr) : null,
+            'month' => $month,
+            'users' => $users->map(fn(User $u) => $this->formatPlanningUser($u))->all(),
+            'capacity_today' => $isCurrentMonth ? $this->buildCapacityToday($todayStr) : null,
         ];
     }
 
-    private function formatUser(User $u): array
+    private function formatPlanningUser(User $user): array
     {
         return [
-            'id'         => (string) $u->id,
-            'firstname'  => $u->firstname ?? '',
-            'lastname'   => $u->lastname ?? '',
-            'title'      => $u->title ?? '',
-            'department' => $u->department ? ['id' => $u->department->id, 'name' => $u->department->name] : null,
-            'status'     => $u->status,
-            'absences'   => $u->absences->map(fn(Absence $a) => [
-                'id'         => $a->id,
-                'type'       => $a->type?->value,
+            'id' => (string) $user->id,
+            'firstname' => $user->firstname ?? '',
+            'lastname' => $user->lastname ?? '',
+            'title' => $user->title ?? '',
+            'department' => $user->department ? ['id' => $user->department->id, 'name' => $user->department->name] : null,
+            'status' => $user->status,
+            'absences' => $user->absences->map(fn(Absence $a) => [
+                'id' => $a->id,
+                'type' => $a->type?->value,
                 'start_date' => $a->start_date?->toDateString(),
                 'start_half' => $a->start_half === AbsenceHalf::Afternoon ? 1 : 0,
-                'end_date'   => $a->end_date?->toDateString(),
-                'end_half'   => $a->end_half === AbsenceHalf::Morning ? 0 : 1,
-                'reason'     => $a->reason,
+                'end_date' => $a->end_date?->toDateString(),
+                'end_half' => $a->end_half === AbsenceHalf::Morning ? 0 : 1,
+                'reason' => $a->reason,
             ])->values()->all(),
         ];
     }
 
-    private function capacityToday(string $today): array
+    private function buildCapacityToday(string $today): array
     {
-        $total   = User::query()->count();
+        $total = User::query()->count();
         $onLeave = User::query()->whereHas('absences', fn($q) => $q
             ->where('start_date', '<=', $today)->where('end_date', '>=', $today))->count();
+
         return ['available' => $total - $onLeave, 'on_leave' => $onLeave, 'total' => $total];
     }
 
@@ -122,7 +123,6 @@ class PlanningService
         }
         return ((int) $half) === 1 ? AbsenceHalf::Afternoon : AbsenceHalf::Morning;
     }
-
 
     private function parseMonth(string $month): array
     {

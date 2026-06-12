@@ -51,7 +51,7 @@ class Project extends Model
     protected function status(): Attribute
     {
         return Attribute::get(function (): ProjectStatus {
-            if ($this->archived_at !== null)  return ProjectStatus::Archived;
+            if ($this->archived_at !== null) return ProjectStatus::Archived;
             if ($this->completed_at !== null) return ProjectStatus::Completed;
             if ($this->paused_at !== null) return ProjectStatus::Paused;
             if ($this->started_at !== null && $this->started_at->isPast()) return ProjectStatus::Active;
@@ -163,8 +163,8 @@ class Project extends Model
     public function getProgressAttribute(): float
     {
         if ($this->completed_at !== null) return 100.0;
-        if ($this->started_at === null)   return 0.0;
-        if ($this->deadline === null)     return 50.0;
+        if ($this->started_at === null) return 0.0;
+        if ($this->deadline === null) return 50.0;
 
         $total = $this->started_at->diffInDays($this->deadline);
         if ($total <= 0) return 100.0;

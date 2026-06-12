@@ -41,7 +41,7 @@ class UserSkillsCountCalculator
     {
         $user->loadMissing('skills.category');
         $total = $user->skills->count();
-        $catCount = $user->skills
+        $categoryCount = $user->skills
             ->groupBy(fn($s) => $s->category?->name ?? 'Uncategorized')
             ->count();
 
@@ -49,7 +49,7 @@ class UserSkillsCountCalculator
             value: $total === 0 ? 'None' : (string) $total,
             valueRaw: $total,
             severity: Severity::OK,
-            insight: $catCount > 0 ? "{$catCount} " . ($catCount === 1 ? 'category' : 'categories') : null,
+            insight: $categoryCount > 0 ? "{$categoryCount} " . ($categoryCount === 1 ? 'category' : 'categories') : null,
         );
 
         return $this->metricsManager->persistUserMetric($user, null, MetricKey::SkillsCount, $stat);

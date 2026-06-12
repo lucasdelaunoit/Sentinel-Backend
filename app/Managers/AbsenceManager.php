@@ -80,7 +80,7 @@ class AbsenceManager
     {
         $user = $absence->user;
         DB::transaction(fn() => $this->absenceService->deleteAbsence($absence));
-        if ($user) $this->dispatchProjectRecalculations($user);
+        $this->dispatchProjectRecalculations($user);
     }
 
     /**
@@ -100,5 +100,4 @@ class AbsenceManager
             upcoming: $this->absenceService->getUserUpcomingAbsencesStat($user),
         );
     }
-
 }

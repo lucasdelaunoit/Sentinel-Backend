@@ -7,16 +7,14 @@ use App\Metrics\Calculators\CriticalityCalculator;
 use App\Metrics\Scales\CriticalityScale;
 use App\Metrics\Severity;
 use App\Metrics\Snapshots\MetricKey;
-use App\Metrics\Snapshots\MetricScope;
 use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
-use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Models\Project;
 use App\Models\SkillCategory;
 use App\Models\User;
+use App\Services\Concerns\ReadsOrgSnapshotStats;
 use App\Support\CompetencyRadar;
 use App\Support\QueryParams;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Spatie\QueryBuilder\AllowedFilter;
@@ -25,26 +23,12 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class UserService
 {
+    use ReadsOrgSnapshotStats;
+
     public function __construct(
         private readonly CriticalityCalculator $criticalityCalculator,
         private readonly MetricSnapshotService $snapshotService,
     ) {}
-
-    /**
-     * <summary>
-     *  Read the latest org-scope snapshot for the given metric key and rehydrate it as a Stat.
-     *  Returns a placeholder Stat when no snapshot has been captured yet.
-     * </summary>
-     *
-     * @param MetricKey $metric Snapshot key to read
-     * @return Stat
-     */
-    private function readOrgSnapshotStat(MetricKey $metric): Stat
-    {
-        $snap = $this->snapshotService->latestFor(MetricScope::Org, null, $metric);
-
-        return $snap !== null ? Stat::fromSnapshot($snap) : Stat::placeholder();
-    }
 
     /**
      * <summary>
@@ -74,41 +58,16 @@ class UserService
         return QueryBuilder::for(User::class, $params->toRequest())
             ->with(['department', 'skills.category'])
             ->allowedFilters([
-                AllowedFilter::callback('search', function ($query, $value) {
-                    $query->where(fn($q) => $q
-                        ->where('firstname', 'like', "%{$value}%")
-                        ->orWhere('lastname', 'like', "%{$value}%")
-                        ->orWhere('email', 'like', "%{$value}%")
-                    );
-                }),
+                $this->makeUserSearchFilter(),
                 AllowedFilter::exact('department_id'),
-                AllowedFilter::callback('skill_id', function ($query, $value) {
-                    $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
-                }),
-                AllowedFilter::callback('status', function ($query, $value) {
-                    $status = UserStatus::tryFrom($value);
-                    if ($status === null) return;
-
-                    $today      = now()->toDateString();
-                    $hasAbsence = fn($q) => $q
-                        ->where('start_date', '<=', $today)
-                        ->where('end_date', '>=', $today);
-
-                    if ($status === UserStatus::Away) {
-                        $query->whereHas('absences', $hasAbsence);
-                    } else {
-                        $query->whereDoesntHave('absences', $hasAbsence);
-                    }
-                }),
+                $this->makeUserSkillFilter(),
+                $this->makeUserStatusFilter(),
                 AllowedFilter::callback('not_in_project', function ($query, $value) {
                     $query->whereDoesntHave('projects', fn($q) => $q->where('projects.id', (int) $value));
                 }),
             ])
             ->allowedSorts([
-                AllowedSort::callback('name', function ($query, bool $descending) {
-                    $dir = $descending ? 'desc' : 'asc';
-                    $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
-                }),
+                $this->makeUserNameSort(),
                 AllowedSort::field('firstname'),
                 AllowedSort::field('lastname'),
                 AllowedSort::field('title'),
@@ -132,38 +91,13 @@ class UserService
     {
         return QueryBuilder::for($project->users()->with(['department', 'skills.category']), $params->toRequest())
             ->allowedFilters([
-                AllowedFilter::callback('search', function ($query, $value) {
-                    $query->where(fn($q) => $q
-                        ->where('firstname', 'like', "%{$value}%")
-                        ->orWhere('lastname', 'like', "%{$value}%")
-                        ->orWhere('email', 'like', "%{$value}%")
-                    );
-                }),
+                $this->makeUserSearchFilter(),
                 AllowedFilter::exact('department_id'),
-                AllowedFilter::callback('skill_id', function ($query, $value) {
-                    $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
-                }),
-                AllowedFilter::callback('status', function ($query, $value) {
-                    $status = UserStatus::tryFrom($value);
-                    if ($status === null) return;
-
-                    $today = now()->toDateString();
-                    $hasAbsence = fn($q) => $q
-                        ->where('start_date', '<=', $today)
-                        ->where('end_date', '>=', $today);
-
-                    if ($status === UserStatus::Away) {
-                        $query->whereHas('absences', $hasAbsence);
-                    } else {
-                        $query->whereDoesntHave('absences', $hasAbsence);
-                    }
-                }),
+                $this->makeUserSkillFilter(),
+                $this->makeUserStatusFilter(),
             ])
             ->allowedSorts([
-                AllowedSort::callback('name', function ($query, bool $descending) {
-                    $dir = $descending ? 'desc' : 'asc';
-                    $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
-                }),
+                $this->makeUserNameSort(),
                 AllowedSort::field('firstname'),
                 AllowedSort::field('lastname'),
                 AllowedSort::field('title'),
@@ -172,6 +106,51 @@ class UserService
             ->defaultSort('firstname')
             ->paginate($params->perPage())
             ->appends($params->rawQuery());
+    }
+
+    private function makeUserSearchFilter(): AllowedFilter
+    {
+        return AllowedFilter::callback('search', function ($query, $value) {
+            $query->where(fn($q) => $q
+                ->where('firstname', 'like', "%{$value}%")
+                ->orWhere('lastname', 'like', "%{$value}%")
+                ->orWhere('email', 'like', "%{$value}%")
+            );
+        });
+    }
+
+    private function makeUserSkillFilter(): AllowedFilter
+    {
+        return AllowedFilter::callback('skill_id', function ($query, $value) {
+            $query->whereHas('skills', fn($q) => $q->where('skills.id', $value));
+        });
+    }
+
+    private function makeUserStatusFilter(): AllowedFilter
+    {
+        return AllowedFilter::callback('status', function ($query, $value) {
+            $status = UserStatus::tryFrom($value);
+            if ($status === null) return;
+
+            $today = now()->toDateString();
+            $hasAbsence = fn($q) => $q
+                ->where('start_date', '<=', $today)
+                ->where('end_date', '>=', $today);
+
+            if ($status === UserStatus::Away) {
+                $query->whereHas('absences', $hasAbsence);
+            } else {
+                $query->whereDoesntHave('absences', $hasAbsence);
+            }
+        });
+    }
+
+    private function makeUserNameSort(): AllowedSort
+    {
+        return AllowedSort::callback('name', function ($query, bool $descending) {
+            $dir = $descending ? 'desc' : 'asc';
+            $query->orderBy('firstname', $dir)->orderBy('lastname', $dir);
+        });
     }
 
     /**
@@ -205,7 +184,7 @@ class UserService
      *  Apply field updates to an existing user and reload the department relation.
      * </summary>
      *
-     * @param User  $user User model instance
+     * @param User $user User model instance
      * @param array $data Validated fields to update
      * @return User Updated user with department relation
      */
@@ -234,9 +213,9 @@ class UserService
      *  Attach a skill to a user at a given proficiency level (idempotent).
      * </summary>
      *
-     * @param User $user    User model instance
-     * @param int  $skillId Target skill ID
-     * @param int  $level   Proficiency level (1–5)
+     * @param User $user User model instance
+     * @param int $skillId Target skill ID
+     * @param int $level Proficiency level (1–5)
      * @return void
      */
     public function attachSkillToUser(User $user, int $skillId, int $level): void
@@ -249,9 +228,9 @@ class UserService
      *  Update the proficiency level of an already-attached skill pivot.
      * </summary>
      *
-     * @param User $user    User model instance
-     * @param int  $skillId Target skill ID
-     * @param int  $level   New proficiency level (1–5)
+     * @param User $user User model instance
+     * @param int $skillId Target skill ID
+     * @param int $level New proficiency level (1–5)
      * @return void
      */
     public function updateUserSkill(User $user, int $skillId, int $level): void
@@ -264,8 +243,8 @@ class UserService
      *  Remove a skill from a user.
      * </summary>
      *
-     * @param User $user    User model instance
-     * @param int  $skillId Target skill ID
+     * @param User $user User model instance
+     * @param int $skillId Target skill ID
      * @return void
      */
     public function detachSkillFromUser(User $user, int $skillId): void

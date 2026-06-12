@@ -45,9 +45,9 @@ class CompanyHolidayController extends Controller
      */
     public function getCompanyHolidaysForMonth(Request $request): AnonymousResourceCollection
     {
-        // Validate (Controller)
+        // Validate & authorize (Controller)
         $validated = $request->validate([
-            'year'  => ['required', 'integer', 'min:1970', 'max:2999'],
+            'year' => ['required', 'integer', 'min:1970', 'max:2999'],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
         ]);
 

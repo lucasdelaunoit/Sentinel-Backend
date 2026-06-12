@@ -36,7 +36,7 @@ class CompanyHolidayManager
      *  Return all CompanyHoliday rows applicable to the given month (including recurring).
      * </summary>
      *
-     * @param int $year  Full year
+     * @param int $year Full year
      * @param int $month Month 1–12
      * @return Collection<int, CompanyHoliday>
      */

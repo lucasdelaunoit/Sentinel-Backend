@@ -39,6 +39,14 @@ class SkillService
             ->appends($params->rawQuery());
     }
 
+    /**
+     * <summary>
+     *  Create a new Skill row.
+     * </summary>
+     *
+     * @param array<string, mixed> $data Validated payload (name, skill_category_id)
+     * @return Skill Newly created skill
+     */
     public function createSkill(array $data): Skill
     {
         return Skill::create($data);
@@ -125,6 +133,15 @@ class SkillService
         $category->skills()->delete();
     }
 
+    /**
+     * <summary>
+     *  Retrieve the given user's skills (paginated, filterable, sortable) with categories eager-loaded.
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @param User $user Target user
+     * @return LengthAwarePaginator Paginated list of the user's skills
+     */
     public function getAgileSkillsForUser(QueryParams $params, User $user): LengthAwarePaginator
     {
         return QueryBuilder::for($user->skills()->with('category'), $params->toRequest())
@@ -141,15 +158,23 @@ class SkillService
             ->appends($params->rawQuery());
     }
 
+    /**
+     * <summary>
+     *  Return the user's skills as flat arrays (id, name, category name, pivot level).
+     * </summary>
+     *
+     * @param User $user Target user
+     * @return SupportCollection<int, array{id: int, name: string, category: string|null, level: int}>
+     */
     public function getUserSkills(User $user): SupportCollection
     {
         $user->loadMissing('skills.category');
 
         return $user->skills->map(fn($skill) => [
-            'id'       => $skill->id,
-            'name'     => $skill->name,
+            'id' => $skill->id,
+            'name' => $skill->name,
             'category' => $skill->category?->name,
-            'level'    => $skill->pivot->level,
+            'level' => $skill->pivot->level,
         ]);
     }
 }

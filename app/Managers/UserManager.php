@@ -93,7 +93,7 @@ class UserManager
      *  Update fields on an existing user inside a transaction.
      * </summary>
      *
-     * @param User  $user Route-model bound user
+     * @param User $user Route-model bound user
      * @param array $data Validated fields to update
      * @return User Updated user with department relation
      * @throws Throwable
@@ -122,9 +122,9 @@ class UserManager
      *  Attach a skill to a user inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
-     * @param int  $level   Proficiency level (1–5)
+     * @param User $user Route-model bound user
+     * @param int $skillId Target skill ID
+     * @param int $level Proficiency level (1–5)
      * @return void
      * @throws Throwable
      */
@@ -141,9 +141,9 @@ class UserManager
      *  Update the proficiency level of an attached skill inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
-     * @param int  $level   New proficiency level (1–5)
+     * @param User $user Route-model bound user
+     * @param int $skillId Target skill ID
+     * @param int $level New proficiency level (1–5)
      * @return void
      * @throws Throwable
      */
@@ -160,8 +160,8 @@ class UserManager
      *  Detach a skill from a user inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
-     * @param User $user    Route-model bound user
-     * @param int  $skillId Target skill ID
+     * @param User $user Route-model bound user
+     * @param int $skillId Target skill ID
      * @return void
      * @throws Throwable
      */
@@ -303,5 +303,4 @@ class UserManager
             activeProjects: $this->userService->getUserActiveProjectsStat($user),
         );
     }
-
 }

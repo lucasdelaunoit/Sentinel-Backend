@@ -15,7 +15,7 @@ class CompanyHoliday extends Model
 
     protected $casts = [
         'start_date' => 'date',
-        'end_date'   => 'date',
-        'recurring'  => 'boolean',
+        'end_date' => 'date',
+        'recurring' => 'boolean',
     ];
 }

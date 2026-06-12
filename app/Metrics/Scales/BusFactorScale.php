@@ -10,31 +10,31 @@ use App\Metrics\Severity;
  */
 enum BusFactorScale: string implements Scale
 {
-    case NoCoverage  = 'no_coverage';
+    case NoCoverage = 'no_coverage';
     case SinglePoint = 'single_point';
-    case Thin        = 'thin';
-    case Adequate    = 'adequate';
-    case Resilient   = 'resilient';
+    case Thin = 'thin';
+    case Adequate = 'adequate';
+    case Resilient = 'resilient';
 
     public static function fromCount(int $bf): self
     {
         return match (true) {
             $bf === 0 => self::NoCoverage,
             $bf === 1 => self::SinglePoint,
-            $bf <= 2  => self::Thin,
-            $bf <= 4  => self::Adequate,
-            default   => self::Resilient,
+            $bf <= 2 => self::Thin,
+            $bf <= 4 => self::Adequate,
+            default => self::Resilient,
         };
     }
 
     public function label(): string
     {
         return match ($this) {
-            self::NoCoverage  => 'No coverage',
+            self::NoCoverage => 'No coverage',
             self::SinglePoint => 'Single point',
-            self::Thin        => 'Thin',
-            self::Adequate    => 'Adequate',
-            self::Resilient   => 'Resilient',
+            self::Thin => 'Thin',
+            self::Adequate => 'Adequate',
+            self::Resilient => 'Resilient',
         };
     }
 
@@ -42,8 +42,8 @@ enum BusFactorScale: string implements Scale
     {
         return match ($this) {
             self::NoCoverage, self::SinglePoint => Severity::CRITICAL,
-            self::Thin                          => Severity::WARNING,
-            self::Adequate, self::Resilient     => Severity::OK,
+            self::Thin => Severity::WARNING,
+            self::Adequate, self::Resilient => Severity::OK,
         };
     }
 }

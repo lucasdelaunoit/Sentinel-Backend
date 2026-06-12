@@ -29,6 +29,14 @@ class SkillManager
         return $this->skillService->getAgileSkills($params);
     }
 
+    /**
+     * <summary>
+     *  Create a new Skill.
+     * </summary>
+     *
+     * @param array<string, mixed> $data Validated payload (name, skill_category_id)
+     * @return Skill Newly created skill
+     */
     public function createSkill(array $data): Skill
     {
         return $this->skillService->createSkill($data);
@@ -71,8 +79,15 @@ class SkillManager
         });
     }
 
-    // User skills
-
+    /**
+     * <summary>
+     *  Retrieve the skills attached to a user (paginated, filterable, sortable).
+     * </summary>
+     *
+     * @param QueryParams $params Normalized pagination, filter & sort parameters
+     * @param User $user Target user whose skills are listed
+     * @return LengthAwarePaginator Paginated list of the user's skills
+     */
     public function getAgileSkillsForUser(QueryParams $params, User $user): LengthAwarePaginator
     {
         return $this->skillService->getAgileSkillsForUser($params, $user);

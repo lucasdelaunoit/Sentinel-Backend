@@ -10,7 +10,7 @@ class AttachUserSkillRequest extends FormRequest
     {
         return [
             'skill_id' => ['required', 'integer', 'exists:skills,id'],
-            'level'    => ['required', 'integer', 'min:1', 'max:5'],
+            'level' => ['required', 'integer', 'min:1', 'max:5'],
         ];
     }
 }

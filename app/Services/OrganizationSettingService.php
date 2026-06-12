@@ -18,17 +18,17 @@ class OrganizationSettingService
         return OrganizationSetting::firstOrCreate(
             ['id' => 1],
             [
-                'name'                               => 'Sentinel',
-                'fragility_tolerance'                => 'balanced',
-                'fragility_weight_bus_factor'        => 35,
-                'fragility_weight_uncovered_skills'  => 30,
-                'fragility_weight_silos'             => 20,
-                'fragility_weight_absence_impact'    => 15,
-                'silo_threshold'                     => 1,
-                'kci_min_level'                      => 3,
-                'critical_bus_factor_threshold'      => 2,
-                'absence_horizon_days'               => 14,
-                'rule_violation_penalty'             => 15,
+                'name' => 'Sentinel',
+                'fragility_tolerance' => 'balanced',
+                'fragility_weight_bus_factor' => 35,
+                'fragility_weight_uncovered_skills' => 30,
+                'fragility_weight_silos' => 20,
+                'fragility_weight_absence_impact' => 15,
+                'silo_threshold' => 1,
+                'kci_min_level' => 3,
+                'critical_bus_factor_threshold' => 2,
+                'absence_horizon_days' => 14,
+                'rule_violation_penalty' => 15,
             ],
         );
     }

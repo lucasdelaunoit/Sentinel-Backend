@@ -46,7 +46,7 @@ class AbsenceNormalizer
     public function totalDays(Absence $absence): float
     {
         $start = AbsenceSlot::start($absence->start_date, $absence->start_half);
-        $end   = AbsenceSlot::end($absence->end_date, $absence->end_half);
+        $end = AbsenceSlot::end($absence->end_date, $absence->end_half);
 
         return max(0.0, ($end - $start + 1) / 2);
     }
@@ -73,7 +73,7 @@ class AbsenceNormalizer
             $value = $this->compute($absence);
             $absence->timestamps = false;
             $absence->forceFill([
-                'normalized_days'      => $value,
+                'normalized_days' => $value,
                 'normalized_frozen_at' => Carbon::now(),
             ])->saveQuietly();
             $absence->timestamps = true;

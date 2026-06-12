@@ -86,11 +86,7 @@ class AbsenceImpactCalculator
         $absentUserIds ??= $this->getTodayAbsentUserIdsForProject($project);
 
         $count = $this->computeRawForProject($project, $absentUserIds);
-        $insight = $count > 0
-            ? "{$count} skill" . ($count > 1 ? 's' : '') . ' became uncovered'
-            : 'No impact from absences';
-
-        $stat = Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $insight);
+        $stat = Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $this->buildImpactInsight($count));
 
         return $this->metricsManager->persistProjectMetric($project, 'absence_impact_raw', MetricKey::AbsenceImpact, $stat);
     }
@@ -111,7 +107,7 @@ class AbsenceImpactCalculator
         if (empty($absentUserIds)) {
             return $this->metricsManager->persistOrgMetric(
                 MetricKey::DashboardAbsenceImpact,
-                Stat::fromScale(AbsenceImpactScale::fromRaw(0), 0, 'No impact from absences'),
+                Stat::fromScale(AbsenceImpactScale::fromRaw(0), 0, $this->buildImpactInsight(0)),
             );
         }
 
@@ -121,19 +117,20 @@ class AbsenceImpactCalculator
 
         $count = 0;
         foreach ($projects as $project) {
-            $baseline = $this->coverage->getCoverage($project, [], [], 0);
-            $withAbsence = $this->coverage->getCoverage($project, $absentUserIds, [], 0);
-            $count += $this->calculateCore($baseline, $withAbsence);
+            $count += $this->computeRawForProject($project, $absentUserIds);
         }
-
-        $insight = $count > 0
-            ? "{$count} skill" . ($count > 1 ? 's' : '') . ' became uncovered'
-            : 'No impact from absences';
 
         return $this->metricsManager->persistOrgMetric(
             MetricKey::DashboardAbsenceImpact,
-            Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $insight),
+            Stat::fromScale(AbsenceImpactScale::fromRaw($count), $count, $this->buildImpactInsight($count)),
         );
+    }
+
+    private function buildImpactInsight(int $count): string
+    {
+        return $count > 0
+            ? "{$count} skill" . ($count > 1 ? 's' : '') . ' became uncovered'
+            : 'No impact from absences';
     }
 
     /**

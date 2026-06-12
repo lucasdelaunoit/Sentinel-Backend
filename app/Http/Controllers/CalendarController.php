@@ -64,19 +64,24 @@ class CalendarController extends Controller
      */
     public function previewImpact(Request $request, CalendarImpactService $impact): JsonResponse
     {
+        // Validate & authorize (Controller)
         $data = $request->validate([
-            'type'               => ['required', Rule::in(['working_days', 'holiday_create', 'holiday_update'])],
-            'working_days'       => ['required_if:type,working_days', 'array', 'size:7'],
-            'working_days.*'     => ['integer', 'in:0,1'],
-            'holiday'            => ['required_if:type,holiday_create,holiday_update', 'array'],
-            'holiday.name'       => ['nullable', 'string', 'max:255'],
+            'type' => ['required', Rule::in(['working_days', 'holiday_create', 'holiday_update'])],
+            'working_days' => ['required_if:type,working_days', 'array', 'size:7'],
+            'working_days.*' => ['integer', 'in:0,1'],
+            'holiday' => ['required_if:type,holiday_create,holiday_update', 'array'],
+            'holiday.name' => ['nullable', 'string', 'max:255'],
             'holiday.start_date' => ['required_with:holiday', 'date'],
-            'holiday.end_date'   => ['required_with:holiday', 'date', 'after_or_equal:holiday.start_date'],
-            'holiday.recurring'  => ['nullable', 'boolean'],
-            'holiday_id'         => ['required_if:type,holiday_update', 'integer'],
+            'holiday.end_date' => ['required_with:holiday', 'date', 'after_or_equal:holiday.start_date'],
+            'holiday.recurring' => ['nullable', 'boolean'],
+            'holiday_id' => ['required_if:type,holiday_update', 'integer'],
         ]);
 
-        return response()->json(['affected' => $impact->previewForChange($data['type'], $data)]);
+        // Act (Manager)
+        $affected = $impact->previewForChange($data['type'], $data);
+
+        // Return (Controller)
+        return response()->json(['affected' => $affected]);
     }
 
     /**
@@ -90,10 +95,12 @@ class CalendarController extends Controller
      */
     public function getCalendarSummary(Request $request): CalendarSummaryResource
     {
+        // Validate & authorize (Controller)
+        $now = CarbonImmutable::now();
+        $year = (int) $request->query('year', $now->year);
+        $month = (int) $request->query('month', $now->month);
+
         // Act (Manager)
-        $now     = CarbonImmutable::now();
-        $year    = (int) $request->query('year', $now->year);
-        $month   = (int) $request->query('month', $now->month);
         $summary = $this->calendarManager->getCalendarSummary($year, $month);
 
         // Return (Controller)

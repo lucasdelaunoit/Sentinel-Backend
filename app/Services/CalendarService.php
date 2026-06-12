@@ -26,27 +26,27 @@ class CalendarService
     public function buildMonthPreview(int $year, int $month, OrganizationSetting $setting, iterable $holidays): array
     {
         $workingMask = $setting->working_days ?? [1, 1, 1, 1, 1, 0, 0];
-        $holidaySet  = $this->buildHolidayDateSet($holidays, $year);
 
         $start = CarbonImmutable::create($year, $month, 1);
-        $end   = $start->endOfMonth();
-        $days  = [];
+        $end = $start->endOfMonth();
+        $holidaySet = $this->buildHolidayDateSetForRange($holidays, $start, $end);
+        $days = [];
 
         foreach (CarbonPeriod::create($start, $end) as $day) {
             $weekdayIdx = (int) $day->dayOfWeekIso - 1; // 0 = Monday
-            $iso        = $day->toDateString();
+            $iso = $day->toDateString();
 
             $status = match (true) {
-                isset($holidaySet[$iso])             => 'holiday',
+                isset($holidaySet[$iso]) => 'holiday',
                 ($workingMask[$weekdayIdx] ?? 0) === 1 => 'working',
-                default                              => 'off',
+                default => 'off',
             };
 
             $days[] = [
-                'date'    => $iso,
-                'day'     => $day->day,
+                'date' => $iso,
+                'day' => $day->day,
                 'weekday' => $weekdayIdx,
-                'status'  => $status,
+                'status' => $status,
             ];
         }
 
@@ -96,23 +96,23 @@ class CalendarService
         iterable $holidays,
     ): float {
         $start = CarbonImmutable::parse($startDate)->startOfDay();
-        $end   = CarbonImmutable::parse($endDate)->startOfDay();
+        $end = CarbonImmutable::parse($endDate)->startOfDay();
         if ($end->lt($start)) {
             return 0.0;
         }
 
         $workingMask = $setting->working_days ?? [1, 1, 1, 1, 1, 0, 0];
-        $holidaySet  = $this->buildHolidayDateSetForRange($holidays, $start, $end);
+        $holidaySet = $this->buildHolidayDateSetForRange($holidays, $start, $end);
 
         $startIsAfternoon = $this->halfValue($startHalf) === AbsenceHalf::Afternoon->value;
-        $endIsMorning     = $this->halfValue($endHalf) === AbsenceHalf::Morning->value;
-        $startIso         = $start->toDateString();
-        $endIso           = $end->toDateString();
+        $endIsMorning = $this->halfValue($endHalf) === AbsenceHalf::Morning->value;
+        $startIso = $start->toDateString();
+        $endIso = $end->toDateString();
 
         $total = 0.0;
         foreach (CarbonPeriod::create($start, $end) as $day) {
             $weekdayIdx = (int) $day->dayOfWeekIso - 1; // 0 = Monday
-            $iso        = $day->toDateString();
+            $iso = $day->toDateString();
 
             $isWorking = !isset($holidaySet[$iso]) && (($workingMask[$weekdayIdx] ?? 0) === 1);
             if (!$isWorking) {
@@ -139,35 +139,6 @@ class CalendarService
 
     /**
      * <summary>
-     *  Build a date-keyed lookup for holidays. Recurring holidays are projected onto the requested year.
-     * </summary>
-     *
-     * @param iterable<CompanyHoliday> $holidays
-     * @param int $year Year used to project recurring holidays
-     * @return array<string, true>
-     */
-    private function buildHolidayDateSet(iterable $holidays, int $year): array
-    {
-        $set = [];
-        foreach ($holidays as $holiday) {
-            $start = CarbonImmutable::parse($holiday->start_date);
-            $end   = CarbonImmutable::parse($holiday->end_date);
-            if ($holiday->recurring) {
-                $start = $start->setYear($year);
-                $end   = $end->setYear($year);
-                if ($end->lt($start)) {
-                    $end = $end->addYear();
-                }
-            }
-            foreach (CarbonPeriod::create($start, $end) as $day) {
-                $set[$day->toDateString()] = true;
-            }
-        }
-        return $set;
-    }
-
-    /**
-     * <summary>
      *  Holiday date-set covering an arbitrary range, projecting recurring holidays onto every
      *  year the range spans (an absence may cross a year boundary).
      * </summary>
@@ -179,12 +150,12 @@ class CalendarService
      */
     private function buildHolidayDateSetForRange(iterable $holidays, CarbonImmutable $rangeStart, CarbonImmutable $rangeEnd): array
     {
-        $set   = [];
+        $set = [];
         $years = range($rangeStart->year, $rangeEnd->year);
 
         foreach ($holidays as $holiday) {
             $start = CarbonImmutable::parse($holiday->start_date);
-            $end   = CarbonImmutable::parse($holiday->end_date);
+            $end = CarbonImmutable::parse($holiday->end_date);
 
             if ($holiday->recurring) {
                 foreach ($years as $year) {

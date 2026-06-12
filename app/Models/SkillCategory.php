@@ -12,8 +12,9 @@ class SkillCategory extends Model
 {
     /** @use HasFactory<SkillCategoryFactory> */
     use HasFactory, SoftDeletes;
+
     protected $fillable = [
-        'name'
+        'name',
     ];
 
     public function skills(): HasMany

@@ -33,20 +33,20 @@ class CalendarImpactService
      */
     public function previewForChange(string $type, array $payload): array
     {
-        $current        = $this->settings->getOrganizationSetting();
+        $current = $this->settings->getOrganizationSetting();
         $currentWorking = $current->working_days ?? [1, 1, 1, 1, 1, 0, 0];
-        $allHolidays    = CompanyHoliday::all();
+        $allHolidays = CompanyHoliday::all();
 
         return match ($type) {
-            'working_days'   => $this->preview($payload['working_days'], $allHolidays),
-            'holiday_create' => $this->preview($currentWorking, $allHolidays->concat([$this->transientHoliday($payload['holiday'])])),
+            'working_days' => $this->preview($payload['working_days'], $allHolidays),
+            'holiday_create' => $this->preview($currentWorking, $allHolidays->concat([$this->makeTransientHoliday($payload['holiday'])])),
             'holiday_update' => $this->preview(
                 $currentWorking,
                 $allHolidays->map(fn(CompanyHoliday $h) => $h->id === (int) ($payload['holiday_id'] ?? 0)
-                    ? $this->transientHoliday($payload['holiday'])
+                    ? $this->makeTransientHoliday($payload['holiday'])
                     : $h),
             ),
-            default          => [],
+            default => [],
         };
     }
 
@@ -62,33 +62,31 @@ class CalendarImpactService
      */
     public function preview(array $futureWorkingDays, Collection $futureHolidays): array
     {
-        $current         = $this->settings->getOrganizationSetting();
+        $current = $this->settings->getOrganizationSetting();
         $currentHolidays = CompanyHoliday::all();
 
         $futureSetting = new OrganizationSetting();
         $futureSetting->working_days = array_values($futureWorkingDays);
 
-        $absences = $this->futureFluidAbsences();
-
         $out = [];
-        foreach ($absences as $absence) {
-            $before = $this->count($absence, $current, $currentHolidays);
-            $after  = $this->count($absence, $futureSetting, $futureHolidays);
+        foreach ($this->getFutureFluidAbsences() as $absence) {
+            $before = $this->countWorkingDays($absence, $current, $currentHolidays);
+            $after = $this->countWorkingDays($absence, $futureSetting, $futureHolidays);
 
             if ($before === $after) {
                 continue;
             }
 
             $out[] = [
-                'absence_id'  => $absence->id,
-                'user_id'     => $absence->user_id,
-                'user_name'   => $absence->user
+                'absence_id' => $absence->id,
+                'user_id' => $absence->user_id,
+                'user_name' => $absence->user
                     ? trim(($absence->user->firstname ?? '') . ' ' . ($absence->user->lastname ?? ''))
                     : 'Unknown',
-                'start_date'  => Carbon::parse($absence->start_date)->toDateString(),
-                'end_date'    => Carbon::parse($absence->end_date)->toDateString(),
+                'start_date' => Carbon::parse($absence->start_date)->toDateString(),
+                'end_date' => Carbon::parse($absence->end_date)->toDateString(),
                 'before_days' => $before,
-                'after_days'  => $after,
+                'after_days' => $after,
             ];
         }
 
@@ -112,7 +110,7 @@ class CalendarImpactService
             return;
         }
 
-        $current  = $this->settings->getOrganizationSetting();
+        $current = $this->settings->getOrganizationSetting();
         $holidays = CompanyHoliday::all();
 
         $absences = Absence::query()
@@ -121,11 +119,11 @@ class CalendarImpactService
             ->get();
 
         foreach ($absences as $absence) {
-            $value = $this->count($absence, $current, $holidays);
+            $value = $this->countWorkingDays($absence, $current, $holidays);
 
             $absence->timestamps = false;
             $absence->forceFill([
-                'normalized_days'      => $value,
+                'normalized_days' => $value,
                 'normalized_frozen_at' => Carbon::now(),
             ])->saveQuietly();
             $absence->timestamps = true;
@@ -133,7 +131,7 @@ class CalendarImpactService
     }
 
     /** @return \Illuminate\Database\Eloquent\Collection<int, Absence> */
-    private function futureFluidAbsences()
+    private function getFutureFluidAbsences()
     {
         return Absence::query()
             ->with('user')
@@ -143,7 +141,7 @@ class CalendarImpactService
             ->get();
     }
 
-    private function count(Absence $absence, OrganizationSetting $setting, Collection $holidays): float
+    private function countWorkingDays(Absence $absence, OrganizationSetting $setting, Collection $holidays): float
     {
         return $this->calendar->countWorkingHalfDays(
             $absence->start_date,
@@ -155,13 +153,13 @@ class CalendarImpactService
         );
     }
 
-    private function transientHoliday(array $data): CompanyHoliday
+    private function makeTransientHoliday(array $data): CompanyHoliday
     {
         $holiday = new CompanyHoliday();
-        $holiday->name       = $data['name'] ?? 'Holiday';
+        $holiday->name = $data['name'] ?? 'Holiday';
         $holiday->start_date = $data['start_date'];
-        $holiday->end_date   = $data['end_date'];
-        $holiday->recurring  = (bool) ($data['recurring'] ?? false);
+        $holiday->end_date = $data['end_date'];
+        $holiday->recurring = (bool) ($data['recurring'] ?? false);
 
         return $holiday;
     }

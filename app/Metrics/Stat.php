@@ -10,10 +10,10 @@ use App\Metrics\Snapshots\MetricSnapshot;
  *
  * Wire shape (matches the contract every /stats route follows):
  *   {
- *     "value":     "Healthy",   // display label
- *     "value_raw": 98,          // numeric form for tooltips / math
- *     "insight":   "Doing well",// optional context one-liner
- *     "severity":  "ok"         // ok | warning | critical (drives traffic light)
+ *     "value": "Healthy",      // display label
+ *     "value_raw": 98,         // numeric form for tooltips / math
+ *     "insight": "Doing well", // optional context one-liner
+ *     "severity": "ok"         // ok | warning | critical (drives traffic light)
  *   }
  *
  * Lives under App\Metrics because it composes a Scale + a Severity — the
@@ -67,7 +67,7 @@ final readonly class Stat
      */
     public static function placeholder(string $value = '—', ?string $insight = 'Not yet computed'): self
     {
-        return new self($value, 0, \App\Metrics\Severity::OK, $insight);
+        return new self($value, 0, Severity::OK, $insight);
     }
 
     public function toArray(): array

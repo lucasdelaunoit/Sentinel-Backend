@@ -22,10 +22,10 @@ class StoreAbsenceRequest extends FormRequest
         return [
             'start_date' => ['required', 'date'],
             'start_half' => ['nullable', Rule::enum(AbsenceHalf::class)],
-            'end_date'   => ['required', 'date', 'after_or_equal:start_date'],
-            'end_half'   => ['nullable', Rule::enum(AbsenceHalf::class)],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'end_half' => ['nullable', Rule::enum(AbsenceHalf::class)],
             'type' => ['nullable', Rule::enum(AbsenceType::class)],
-            'reason'     => ['nullable', 'string'],
+            'reason' => ['nullable', 'string'],
         ];
     }
 
@@ -37,12 +37,12 @@ class StoreAbsenceRequest extends FormRequest
             }
 
             /** @var User $user */
-            $user  = $this->route('user');
+            $user = $this->route('user');
             $start = Carbon::parse($this->input('start_date'))->toDateString();
-            $end   = Carbon::parse($this->input('end_date'))->toDateString();
+            $end = Carbon::parse($this->input('end_date'))->toDateString();
 
             $candidateStart = AbsenceSlot::start($start, $this->input('start_half'));
-            $candidateEnd   = AbsenceSlot::end($end, $this->input('end_half'));
+            $candidateEnd = AbsenceSlot::end($end, $this->input('end_half'));
 
             // Same-day PM→AM and similar half-day inversions.
             if ($candidateEnd < $candidateStart) {
@@ -76,7 +76,7 @@ class StoreAbsenceRequest extends FormRequest
 
             foreach ($candidates as $existing) {
                 $existingStart = AbsenceSlot::start($existing->start_date, $existing->start_half);
-                $existingEnd   = AbsenceSlot::end($existing->end_date, $existing->end_half);
+                $existingEnd = AbsenceSlot::end($existing->end_date, $existing->end_half);
 
                 if (AbsenceSlot::overlaps($candidateStart, $candidateEnd, $existingStart, $existingEnd)) {
                     $v->errors()->add('start_date', 'This absence overlaps with an existing absence for this user.');

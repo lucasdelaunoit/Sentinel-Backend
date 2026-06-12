@@ -2,13 +2,11 @@
 
 namespace App\Services;
 
-use App\Metrics\Scales\AbsenceImpactScale;
 use App\Metrics\Scales\FragilityScale;
 use App\Metrics\Scales\KnowledgeCoverageScale;
 use App\Metrics\Scales\TeamAvailabilityScale;
 use App\Metrics\Severity;
 use App\Metrics\Snapshots\MetricKey;
-use App\Metrics\Snapshots\MetricScope;
 use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Enums\ProjectStatus;
 use App\Enums\UserStatus;
@@ -17,6 +15,7 @@ use App\Models\Project;
 use App\Models\Skill;
 use App\Models\SkillCategory;
 use App\Models\User;
+use App\Services\Concerns\ReadsOrgSnapshotStats;
 use App\Support\CompetencyRadar;
 use App\Support\QueryParams;
 use Carbon\Carbon;
@@ -29,6 +28,8 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class ProjectService
 {
+    use ReadsOrgSnapshotStats;
+
     public function __construct(
         private readonly MetricSnapshotService $snapshotService,
     ) {}
@@ -66,22 +67,6 @@ class ProjectService
     public function getNonArchivedProjects(): Collection
     {
         return Project::query()->whereNull('archived_at')->get(['id']);
-    }
-
-    /**
-     * <summary>
-     *  Read the latest org-scope snapshot for the given metric key and rehydrate it as a Stat.
-     *  Returns a placeholder Stat when no snapshot has been captured yet.
-     * </summary>
-     *
-     * @param MetricKey $metric Snapshot key to read
-     * @return Stat
-     */
-    private function readOrgSnapshotStat(MetricKey $metric): Stat
-    {
-        $snap = $this->snapshotService->latestFor(MetricScope::Org, null, $metric);
-
-        return $snap !== null ? Stat::fromSnapshot($snap) : Stat::placeholder();
     }
 
     /**
@@ -131,8 +116,6 @@ class ProjectService
     {
         return $this->readOrgSnapshotStat(MetricKey::ProjectsDeadlinePressure);
     }
-
-    // ───────────────────────── /projects/stats ─────────────────────────
 
     // ──────────────────── /projects/{project}/stats ────────────────────
 
@@ -235,7 +218,6 @@ class ProjectService
     }
 
     // ───────────────────────── /dashboard/stats ─────────────────────────
-
 
     /**
      * <summary>
@@ -670,6 +652,24 @@ class ProjectService
         return $this->knowledgeCoverageMatrix($project);
     }
 
+    private function isUserOnLeaveOn(User $user, Carbon $today): bool
+    {
+        return $user->absences->contains(fn($a) => Carbon::parse($a->start_date)->lte($today)
+            && Carbon::parse($a->end_date)->gte($today));
+    }
+
+    private function formatSkillHolder(User $user, int $level, bool $onLeave): array
+    {
+        return [
+            'id' => $user->id,
+            'firstname' => $user->firstname,
+            'lastname' => $user->lastname,
+            'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
+            'level' => $level,
+            'on_leave_today' => $onLeave,
+        ];
+    }
+
     private function knowledgeCoverageMatrix(Project $project): array
     {
         $project->loadMissing([
@@ -697,23 +697,12 @@ class ProjectService
                 $level = (int) $userSkill->pivot->level;
                 $maxLevel = max($maxLevel, $level);
 
-                $onLeave = $user->absences->contains(function ($a) use ($today) {
-                    return Carbon::parse($a->start_date)->lte($today)
-                        && Carbon::parse($a->end_date)->gte($today);
-                });
-
+                $onLeave = $this->isUserOnLeaveOn($user, $today);
                 if (!$onLeave && $level >= $required) {
                     $activeCount++;
                 }
 
-                $holders[] = [
-                    'id' => $user->id,
-                    'firstname' => $user->firstname,
-                    'lastname' => $user->lastname,
-                    'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
-                    'level' => $level,
-                    'on_leave_today' => $onLeave,
-                ];
+                $holders[] = $this->formatSkillHolder($user, $level, $onLeave);
             }
 
             $status = match (true) {
@@ -810,19 +799,9 @@ class ProjectService
                     continue;
                 }
 
-                $onLeave = $user->absences->contains(function ($a) use ($today) {
-                    return Carbon::parse($a->start_date)->lte($today)
-                        && Carbon::parse($a->end_date)->gte($today);
-                });
+                $onLeave = $this->isUserOnLeaveOn($user, $today);
 
-                $holders[] = [
-                    'id' => $user->id,
-                    'firstname' => $user->firstname,
-                    'lastname' => $user->lastname,
-                    'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
-                    'level' => (int) $userSkill->pivot->level,
-                    'on_leave_today' => $onLeave,
-                ];
+                $holders[] = $this->formatSkillHolder($user, (int) $userSkill->pivot->level, $onLeave);
             }
 
             usort($holders, fn($a, $b) => $b['level'] <=> $a['level']);
@@ -935,20 +914,9 @@ class ProjectService
 
         $paginator->getCollection()->transform(function ($user) use ($today) {
             $userSkill = $user->skills->first();
+            $onLeave = $this->isUserOnLeaveOn($user, $today);
 
-            $onLeave = $user->absences->contains(function ($a) use ($today) {
-                return Carbon::parse($a->start_date)->lte($today)
-                    && Carbon::parse($a->end_date)->gte($today);
-            });
-
-            return [
-                'id' => $user->id,
-                'firstname' => $user->firstname,
-                'lastname' => $user->lastname,
-                'status' => ($onLeave ? UserStatus::Away : UserStatus::Available)->value,
-                'level' => (int) ($userSkill?->pivot->level ?? 0),
-                'on_leave_today' => $onLeave,
-            ];
+            return $this->formatSkillHolder($user, (int) ($userSkill?->pivot->level ?? 0), $onLeave);
         });
 
         return $paginator;

@@ -9,6 +9,7 @@ use App\Metrics\Snapshots\MetricSnapshotService;
 use App\Metrics\Stat;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -43,12 +44,7 @@ class MetricsManager
         MetricKey $key,
         Stat $stat,
     ): MetricSnapshot {
-        return DB::transaction(function () use ($project, $cachedColumn, $key, $stat) {
-            if ($cachedColumn !== null) {
-                $project->update([$cachedColumn => $stat->valueRaw]);
-            }
-            return $this->snapshotsService->captureSnapshot(MetricScope::Project, $project->id, $key, $stat);
-        });
+        return $this->persistEntityMetric($project, MetricScope::Project, $cachedColumn, $key, $stat);
     }
 
     /**
@@ -70,11 +66,35 @@ class MetricsManager
         MetricKey $key,
         Stat $stat,
     ): MetricSnapshot {
-        return DB::transaction(function () use ($user, $cachedColumn, $key, $stat) {
+        return $this->persistEntityMetric($user, MetricScope::User, $cachedColumn, $key, $stat);
+    }
+
+    /**
+     * <summary>
+     *  Shared persistence path for entity-scoped metrics: one transaction that updates the
+     *  optional cached column on the entity row and appends one MetricSnapshot.
+     * </summary>
+     *
+     * @param Model $entity Target Project or User row
+     * @param MetricScope $scope Snapshot scope matching the entity type
+     * @param string|null $cachedColumn Column on the entity table to update with $stat->valueRaw, or null
+     * @param MetricKey $key Snapshot key
+     * @param Stat $stat Built Stat
+     * @return MetricSnapshot Newly written row
+     * @throws Throwable When the underlying DB transaction fails and is rolled back
+     */
+    private function persistEntityMetric(
+        Model $entity,
+        MetricScope $scope,
+        ?string $cachedColumn,
+        MetricKey $key,
+        Stat $stat,
+    ): MetricSnapshot {
+        return DB::transaction(function () use ($entity, $scope, $cachedColumn, $key, $stat) {
             if ($cachedColumn !== null) {
-                $user->update([$cachedColumn => $stat->valueRaw]);
+                $entity->update([$cachedColumn => $stat->valueRaw]);
             }
-            return $this->snapshotsService->captureSnapshot(MetricScope::User, $user->id, $key, $stat);
+            return $this->snapshotsService->captureSnapshot($scope, $entity->id, $key, $stat);
         });
     }
 

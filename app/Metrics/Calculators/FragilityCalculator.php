@@ -116,8 +116,8 @@ class FragilityCalculator
         $siloRatio = $siloed / $total;
         $absenceImpact = $this->computeAbsenceImpactRatio($project, $matrix, $absentUserIds, $settings, $presentUserIds);
 
-        $bf = $this->busFactor->computeRawForProject($project, $absentUserIds, $presentUserIds);
-        $busRisk = $bf >= 5 ? 0 : max(0, 100 - $bf * 20);
+        $busFactor = $this->busFactor->computeRawForProject($project, $absentUserIds, $presentUserIds);
+        $busRisk = $busFactor >= 5 ? 0 : max(0, 100 - $busFactor * 20);
 
         return $this->calculateCore($busRisk, $uncoveredRatio, $siloRatio, $absenceImpact, $settings);
     }
@@ -138,10 +138,10 @@ class FragilityCalculator
         if ($merged === $absentUserIds) return 0.0;
 
         // Horizon absences arrive via $merged — keep the matrix itself at horizon 0.
-        $with = $this->coverage->getCoverage($project, $merged, $presentUserIds, 0);
+        $withAbsence = $this->coverage->getCoverage($project, $merged, $presentUserIds, 0);
         $newlyUncovered = 0;
-        foreach ($with as $sid => $row) {
-            if ($row['status'] === 'uncovered' && ($baselineMatrix[$sid]['status'] ?? 'uncovered') !== 'uncovered') {
+        foreach ($withAbsence as $skillId => $row) {
+            if ($row['status'] === 'uncovered' && ($baselineMatrix[$skillId]['status'] ?? 'uncovered') !== 'uncovered') {
                 $newlyUncovered++;
             }
         }

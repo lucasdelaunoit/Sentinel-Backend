@@ -54,8 +54,8 @@ class CriticalityCalculator
                 ->selectRaw('user_skills.skill_id, count(distinct users.id) as c')
                 ->groupBy('user_skills.skill_id')
                 ->pluck('c', 'user_skills.skill_id');
-            foreach ($userSkillIds as $sid) {
-                if ((int) ($holderCounts[$sid] ?? 0) === 1) $uniqueCount++;
+            foreach ($userSkillIds as $skillId) {
+                if ((int) ($holderCounts[$skillId] ?? 0) === 1) $uniqueCount++;
             }
         }
 
@@ -75,10 +75,10 @@ class CriticalityCalculator
 
             $isInSmallestCover = false;
             foreach ($matrix as $row) {
-                $uids = array_column($row['employees'], 'user_id');
-                if (!in_array($user->id, $uids, true)) continue;
+                $coveringUserIds = array_column($row['employees'], 'user_id');
+                if (!in_array($user->id, $coveringUserIds, true)) continue;
                 if ($row['status'] === 'siloed') $siloCount++;
-                if ($smallest !== PHP_INT_MAX && count($uids) === $smallest && $smallest <= $threshold) {
+                if ($smallest !== PHP_INT_MAX && count($coveringUserIds) === $smallest && $smallest <= $threshold) {
                     $isInSmallestCover = true;
                 }
             }

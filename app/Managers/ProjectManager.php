@@ -162,9 +162,9 @@ class ProjectManager
      */
     public function createProject(array $data): Project
     {
-        $userIds      = $data['user_ids'] ?? [];
+        $userIds = $data['user_ids'] ?? [];
         $requirements = $data['skill_requirements'] ?? [];
-        $projectData  = collect($data)->except(['user_ids', 'skill_requirements'])->all();
+        $projectData = collect($data)->except(['user_ids', 'skill_requirements'])->all();
 
         $project = DB::transaction(function () use ($projectData, $userIds, $requirements) {
             $project = $this->projectService->createProject($projectData);
@@ -343,7 +343,7 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Resume a paused project inside a transaction. No risk recalculation.
+     *  Resume a paused project inside a transaction, then dispatch project risk recalculation.
      * </summary>
      *
      * @param Project $project Target project
@@ -359,7 +359,7 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Mark a project completed inside a transaction. No risk recalculation.
+     *  Mark a project completed inside a transaction, then dispatch project risk recalculation.
      * </summary>
      *
      * @param Project $project Target project
@@ -375,7 +375,7 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Reopen a completed project inside a transaction. No risk recalculation.
+     *  Reopen a completed project inside a transaction, then dispatch project risk recalculation.
      * </summary>
      *
      * @param Project $project Target project

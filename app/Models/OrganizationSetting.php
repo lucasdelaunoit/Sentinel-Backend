@@ -22,15 +22,15 @@ class OrganizationSetting extends Model
     ];
 
     protected $casts = [
-        'working_days'                       => 'array',
-        'fragility_weight_bus_factor'        => 'integer',
-        'fragility_weight_uncovered_skills'  => 'integer',
-        'fragility_weight_silos'             => 'integer',
-        'fragility_weight_absence_impact'    => 'integer',
-        'silo_threshold'                     => 'integer',
-        'kci_min_level'                      => 'integer',
-        'critical_bus_factor_threshold'      => 'integer',
-        'absence_horizon_days'               => 'integer',
-        'rule_violation_penalty'             => 'integer',
+        'working_days' => 'array',
+        'fragility_weight_bus_factor' => 'integer',
+        'fragility_weight_uncovered_skills' => 'integer',
+        'fragility_weight_silos' => 'integer',
+        'fragility_weight_absence_impact' => 'integer',
+        'silo_threshold' => 'integer',
+        'kci_min_level' => 'integer',
+        'critical_bus_factor_threshold' => 'integer',
+        'absence_horizon_days' => 'integer',
+        'rule_violation_penalty' => 'integer',
     ];
 }

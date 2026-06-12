@@ -44,7 +44,7 @@ class CompanyHolidayService
     public function getCompanyHolidaysForMonth(int $year, int $month): Collection
     {
         $monthStart = sprintf('%04d-%02d-01', $year, $month);
-        $monthEnd   = date('Y-m-t', strtotime($monthStart));
+        $monthEnd = date('Y-m-t', strtotime($monthStart));
 
         return CompanyHoliday::query()
             ->where(function ($q) use ($monthStart, $monthEnd) {

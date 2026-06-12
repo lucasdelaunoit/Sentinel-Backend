@@ -194,18 +194,7 @@ class DashboardManager
      */
     private function fragilityBlock(float $before, float $after): array
     {
-        $beforeInt = (int) round(max(0.0, min(100.0, $before)));
-        $afterInt = (int) round(max(0.0, min(100.0, $after)));
-        $scale = FragilityScale::fromRaw($afterInt);
-
-        return [
-            'before' => $beforeInt,
-            'after' => $afterInt,
-            'delta' => $afterInt - $beforeInt,
-            'tier' => $scale->value,
-            'tier_label' => $scale->label(),
-            'severity' => $scale->severity()->value,
-        ];
+        return $this->buildMetricBlock($before, $after, FragilityScale::fromRaw(...));
     }
 
     /**
@@ -219,9 +208,25 @@ class DashboardManager
      */
     private function knowledgeCoverageBlock(float $before, float $after): array
     {
+        return $this->buildMetricBlock($before, $after, KnowledgeCoverageScale::fromRaw(...));
+    }
+
+    /**
+     * <summary>
+     *  Shared before/after metric block: values clamped to 0–100 and rounded, delta, and
+     *  tier/severity derived from the after value via the supplied scale resolver.
+     * </summary>
+     *
+     * @param float $before Raw metric value before the absence
+     * @param float $after Raw metric value after the absence
+     * @param callable $resolveScale Maps the rounded after value to its Scale enum case
+     * @return array<string, mixed>
+     */
+    private function buildMetricBlock(float $before, float $after, callable $resolveScale): array
+    {
         $beforeInt = (int) round(max(0.0, min(100.0, $before)));
         $afterInt = (int) round(max(0.0, min(100.0, $after)));
-        $scale = KnowledgeCoverageScale::fromRaw($afterInt);
+        $scale = $resolveScale($afterInt);
 
         return [
             'before' => $beforeInt,

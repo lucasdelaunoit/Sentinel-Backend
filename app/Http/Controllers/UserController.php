@@ -140,12 +140,16 @@ class UserController extends Controller
      * </summary>
      *
      * @param UpdateUserRequest $request Fields to update (all optional)
-     * @param User              $user    Route-model bound user
+     * @param User $user Route-model bound user
      * @return UserResource Updated user
      */
     public function updateUser(UpdateUserRequest $request, User $user): UserResource
     {
-        return UserResource::make($this->userManager->updateUser($user, $request->validated()));
+        // Act (Manager)
+        $user = $this->userManager->updateUser($user, $request->validated());
+
+        // Return (Controller)
+        return UserResource::make($user);
     }
 
     /**
@@ -158,8 +162,10 @@ class UserController extends Controller
      */
     public function deleteUser(User $user): JsonResponse
     {
+        // Act (Manager)
         $this->userManager->deleteUser($user);
 
+        // Return (Controller)
         return response()->json(null, 204);
     }
 
@@ -169,14 +175,16 @@ class UserController extends Controller
      * </summary>
      *
      * @param AttachUserSkillRequest $request skill_id and level (1–5)
-     * @param User                   $user    Route-model bound user
+     * @param User $user Route-model bound user
      * @return JsonResponse HTTP 200 confirmation message
      */
     public function attachSkillToUser(AttachUserSkillRequest $request, User $user): JsonResponse
     {
+        // Act (Manager)
         $data = $request->validated();
         $this->userManager->attachSkillToUser($user, $data['skill_id'], $data['level']);
 
+        // Return (Controller)
         return response()->json(['message' => 'Skill added']);
     }
 
@@ -186,14 +194,16 @@ class UserController extends Controller
      * </summary>
      *
      * @param UpdateUserSkillRequest $request level (1–5)
-     * @param User                   $user    Route-model bound user
-     * @param Skill                  $skill   Route-model bound skill
+     * @param User $user Route-model bound user
+     * @param Skill $skill Route-model bound skill
      * @return JsonResponse HTTP 200 confirmation message
      */
     public function updateUserSkill(UpdateUserSkillRequest $request, User $user, Skill $skill): JsonResponse
     {
+        // Act (Manager)
         $this->userManager->updateUserSkill($user, $skill->id, $request->validated()['level']);
 
+        // Return (Controller)
         return response()->json(['message' => 'Skill level updated']);
     }
 
@@ -202,14 +212,16 @@ class UserController extends Controller
      *  Detach a skill from a user.
      * </summary>
      *
-     * @param User  $user  Route-model bound user
+     * @param User $user Route-model bound user
      * @param Skill $skill Route-model bound skill
      * @return JsonResponse HTTP 204 No Content
      */
     public function detachSkillFromUser(User $user, Skill $skill): JsonResponse
     {
+        // Act (Manager)
         $this->userManager->detachSkillFromUser($user, $skill->id);
 
+        // Return (Controller)
         return response()->json(null, 204);
     }
 
@@ -223,7 +235,11 @@ class UserController extends Controller
      */
     public function getUserCriticality(User $user): JsonResponse
     {
-        return response()->json($this->userManager->getUserCriticality($user));
+        // Act (Manager)
+        $criticality = $this->userManager->getUserCriticality($user);
+
+        // Return (Controller)
+        return response()->json($criticality);
     }
 
     /**
@@ -236,7 +252,11 @@ class UserController extends Controller
      */
     public function getUserRecommendations(User $user): JsonResponse
     {
-        return response()->json($this->userManager->getUserRecommendations($user));
+        // Act (Manager)
+        $recommendations = $this->userManager->getUserRecommendations($user);
+
+        // Return (Controller)
+        return response()->json($recommendations);
     }
 
     /**
@@ -281,7 +301,11 @@ class UserController extends Controller
      */
     public function getUsersStats(): UsersStatsResource
     {
-        return new UsersStatsResource($this->userManager->getUsersStats());
+        // Act (Manager)
+        $stats = $this->userManager->getUsersStats();
+
+        // Return (Controller)
+        return new UsersStatsResource($stats);
     }
 
     /**
