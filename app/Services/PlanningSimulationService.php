@@ -76,8 +76,13 @@ class PlanningSimulationService
 
         $perSkill = $this->buildSkillImpacts($skillAggregator);
         $perUser  = $this->buildUserImpacts($absences, $usersById, $allUsers, $perProject, $userDays, $workingDays);
-        $perDay   = $this->buildDayLoad($absences, $perSkill, $totalUsers);
-        $hotspots = $this->buildHotspots($perDay, $perProject);
+
+        /* Day load counts everyone out of office in the scenario window: the simulated
+           absences plus the accepted ones already in the database. */
+        $acceptedAbsences = $this->acceptedAbsencesWithin($absences);
+        $simulatedUserIds = array_map('strval', $absentUserIds);
+        $perDay   = $this->buildDayLoad(array_merge($absences, $acceptedAbsences), $perSkill, $totalUsers);
+        $hotspots = $this->buildHotspots($perDay, $perProject, $simulatedUserIds);
         $shifts   = $this->buildShifts($perSkill);
         $cascading = $this->buildCascading($absentUserIds, $usersById);
         $warnings  = $this->buildWarnings($perSkill, $shifts, $perDay);
