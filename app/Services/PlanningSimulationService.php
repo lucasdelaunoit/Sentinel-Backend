@@ -321,6 +321,35 @@ class PlanningSimulationService
         return $out;
     }
 
+    /**
+     * Accepted absences already in the database that overlap the simulated window,
+     * normalized to the simulate payload shape and clipped to the window so they only
+     * weigh on scenario days. A clipped edge resets its half-day marker — the original
+     * half applies to a date outside the window.
+     */
+    private function acceptedAbsencesWithin(array $absences): array
+    {
+        $windowStart = collect($absences)->pluck('start_date')->min();
+        $windowEnd   = collect($absences)->pluck('end_date')->max();
+
+        return Absence::query()
+            ->whereDate('start_date', '<=', $windowEnd)
+            ->whereDate('end_date', '>=', $windowStart)
+            ->get()
+            ->map(function (Absence $a) use ($windowStart, $windowEnd) {
+                $start = $a->start_date->toDateString();
+                $end   = $a->end_date->toDateString();
+                return [
+                    'user_id'    => (string) $a->user_id,
+                    'start_date' => max($start, $windowStart),
+                    'end_date'   => min($end, $windowEnd),
+                    'start_half' => $start < $windowStart ? 0 : ($a->start_half === AbsenceHalf::Afternoon ? 1 : 0),
+                    'end_half'   => $end > $windowEnd ? 1 : ($a->end_half === AbsenceHalf::Morning ? 0 : 1),
+                ];
+            })
+            ->all();
+    }
+
     private function buildDayLoad(array $absences, array $perSkill, int $totalUsers): array
     {
         $dayMap = [];
@@ -330,9 +359,9 @@ class PlanningSimulationService
                 $weight = 1.0;
                 if ($i === 0 && ($a['start_half'] ?? 0) === 1) $weight = 0.5;
                 if ($i === count($dates) - 1 && ($a['end_half'] ?? 1) === 0) $weight = 0.5;
-                if (!isset($dayMap[$d])) $dayMap[$d] = ['absents' => [], 'fte' => 0.0];
-                $dayMap[$d]['absents'][(string) $a['user_id']] = true;
-                $dayMap[$d]['fte'] += $weight;
+                if (!isset($dayMap[$d])) $dayMap[$d] = ['absents' => []];
+                $uid = (string) $a['user_id'];
+                $dayMap[$d]['absents'][$uid] = max($dayMap[$d]['absents'][$uid] ?? 0.0, $weight);
             }
         }
 
@@ -347,11 +376,13 @@ class PlanningSimulationService
                 'date'                     => $date,
                 'is_weekend'               => $dow === 0 || $dow === 6,
                 'is_holiday'               => false,
-                'absent_user_ids'          => array_keys($info['absents']),
+                // PHP coerces numeric-string array keys to ints — re-stringify so the JSON
+                // payload matches the frontend contract (string ids).
+                'absent_user_ids'          => array_map('strval', array_keys($info['absents'])),
                 'absent_count'             => $absentCount,
-                'absent_fte'               => $info['fte'],
+                'absent_fte'               => array_sum($info['absents']),
                 'coverage_pct'             => (int) round((1 - $ratio) * 100),
-                'capacity_pct'             => (int) round((1 - $info['fte'] / max($totalUsers, 1)) * 100),
+                'capacity_pct'             => (int) round((1 - array_sum($info['absents']) / max($totalUsers, 1)) * 100),
                 'critical_skills_uncovered' => array_values(array_map(
                     fn($s) => $s['skill_id'],
                     array_filter($perSkill, fn($s) => $s['severity'] === 'critical' && in_array($date, $s['dates_uncovered'], true)),
@@ -362,7 +393,7 @@ class PlanningSimulationService
         return $out;
     }
 
-    private function buildHotspots(array $perDay, array $perProject): array
+    private function buildHotspots(array $perDay, array $perProject, array $simulatedUserIds): array
     {
         $hotspots = [];
         $run = null;
@@ -371,21 +402,29 @@ class PlanningSimulationService
                 if ($run === null) $run = ['start' => $d['date'], 'end' => $d['date'], 'days' => [$d]];
                 else { $run['end'] = $d['date']; $run['days'][] = $d; }
             } elseif ($run !== null) {
-                $hotspots[] = $this->finalizeHotspot($run, $perProject);
+                $hotspots[] = $this->finalizeHotspot($run, $perProject, $simulatedUserIds);
                 $run = null;
             }
         }
-        if ($run !== null) $hotspots[] = $this->finalizeHotspot($run, $perProject);
+        if ($run !== null) $hotspots[] = $this->finalizeHotspot($run, $perProject, $simulatedUserIds);
         return $hotspots;
     }
 
-    private function finalizeHotspot(array $run, array $perProject): array
+    private function finalizeHotspot(array $run, array $perProject, array $simulatedUserIds): array
     {
         $absentIds = collect($run['days'])->flatMap(fn($d) => $d['absent_user_ids'])->unique()->values()->all();
         $maxSev = collect($run['days'])->contains(fn($d) => $d['severity'] === 'critical') ? 'critical' : 'warning';
+
+        $simulated = count(array_intersect($absentIds, $simulatedUserIds));
+        $accepted  = count($absentIds) - $simulated;
+        $reason    = count($absentIds) . ' absences overlap';
+        if ($simulated > 0 && $accepted > 0) {
+            $reason .= " ({$simulated} simulated + {$accepted} accepted)";
+        }
+
         return [
             'date_range'         => [$run['start'], $run['end']],
-            'reason'             => count($absentIds) . ' absences overlap',
+            'reason'             => $reason,
             'absent_user_ids'    => $absentIds,
             'projects_impacted'  => array_values(array_map(
                 fn($p) => $p['project_id'],
