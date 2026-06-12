@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -13,14 +13,14 @@ return new class extends Migration
             $table->string('name');
             $table->text('description')->nullable();
 
-            // Cached metrics — populated by RecalculateProjectRiskJob
+            // Cached metrics â€” populated by RecalculateProjectMetricsJob
             $table->unsignedTinyInteger('fragility_raw')->default(0);
             $table->unsignedTinyInteger('team_availability_raw')->default(0);
             $table->unsignedTinyInteger('knowledge_coverage_raw')->default(0);
             $table->unsignedSmallInteger('bus_factor')->default(0);
             $table->unsignedSmallInteger('absence_impact_raw')->default(0);
 
-            // Lifecycle timestamps — status is derived from these
+            // Lifecycle timestamps â€” status is derived from these
             $table->date('started_at')->nullable();
             $table->date('deadline')->nullable();
             $table->timestamp('paused_at')->nullable();

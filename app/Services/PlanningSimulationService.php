@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\AbsenceHalf;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Metrics\Calculators\FragilityCalculator;
+use App\Models\Absence;
 use App\Models\Project;
 use App\Models\User;
 use Carbon\Carbon;

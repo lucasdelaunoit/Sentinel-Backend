@@ -13,7 +13,7 @@ use Throwable;
 
 class AbsenceManager
 {
-    use Concerns\DispatchesProjectRecalculations;
+    use Concerns\DispatchesRecalculations;
 
     public function __construct(
         private readonly AbsenceService $absenceService,

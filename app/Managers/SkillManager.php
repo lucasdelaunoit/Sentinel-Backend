@@ -62,7 +62,7 @@ class SkillManager
      */
     public function deleteSkill(Skill $skill): void
     {
-        // TODO: dispatch RecalculateProjectRiskJob for $this->skillService->getProjectsForSkill($skill)
+        // TODO: dispatch RecalculateProjectMetricsJob for $this->skillService->getProjectsForSkill($skill)
         //       before the transaction so affected projects are known
         DB::transaction(function () use ($skill) {
             $this->skillService->detachSkillFromAllUsers($skill);

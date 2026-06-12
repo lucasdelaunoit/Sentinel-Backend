@@ -21,7 +21,7 @@ use Throwable;
 
 class UserManager
 {
-    use Concerns\DispatchesProjectRecalculations;
+    use Concerns\DispatchesRecalculations;
 
     public function __construct(
         private readonly UserService $userService,
@@ -119,7 +119,7 @@ class UserManager
 
     /**
      * <summary>
-     *  Attach a skill to a user inside a transaction, then trigger project risk recalculations.
+     *  Attach a skill to a user inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
      * @param User $user    Route-model bound user
@@ -133,11 +133,12 @@ class UserManager
         DB::transaction(fn() => $this->userService->attachSkillToUser($user, $skillId, $level));
 
         $this->dispatchProjectRecalculations($user);
+        $this->dispatchUserRecalculation($user);
     }
 
     /**
      * <summary>
-     *  Update the proficiency level of an attached skill inside a transaction, then trigger project risk recalculations.
+     *  Update the proficiency level of an attached skill inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
      * @param User $user    Route-model bound user
@@ -151,11 +152,12 @@ class UserManager
         DB::transaction(fn() => $this->userService->updateUserSkill($user, $skillId, $level));
 
         $this->dispatchProjectRecalculations($user);
+        $this->dispatchUserRecalculation($user);
     }
 
     /**
      * <summary>
-     *  Detach a skill from a user inside a transaction, then trigger project risk recalculations.
+     *  Detach a skill from a user inside a transaction, then trigger project + user metric recalculations.
      * </summary>
      *
      * @param User $user    Route-model bound user
@@ -168,6 +170,7 @@ class UserManager
         DB::transaction(fn() => $this->userService->detachSkillFromUser($user, $skillId));
 
         $this->dispatchProjectRecalculations($user);
+        $this->dispatchUserRecalculation($user);
     }
 
     /**

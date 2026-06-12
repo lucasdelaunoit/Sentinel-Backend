@@ -2,7 +2,6 @@
 
 namespace App\Managers;
 
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Models\OrganizationSetting;
 use App\Models\Project;
 use App\Services\OrganizationSettingService;
@@ -12,6 +11,8 @@ use Throwable;
 
 class OrganizationSettingManager
 {
+    use Concerns\DispatchesRecalculations;
+
     public function __construct(
         private readonly OrganizationSettingService $organizationSettingService,
         private readonly ProjectService $projectService,
@@ -43,7 +44,7 @@ class OrganizationSettingManager
         $setting = DB::transaction(fn() => $this->organizationSettingService->updateOrganizationSetting($data));
 
         $this->projectService->getNonArchivedProjects()->each(
-            fn(Project $p) => RecalculateProjectRiskJob::dispatch($p)
+            fn(Project $p) => $this->dispatchProjectRecalculation($p)
         );
 
         return $setting;

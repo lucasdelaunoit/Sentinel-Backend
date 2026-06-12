@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\CalculationSyncStatusResource;
 use App\Http\Resources\DashboardStatsResource;
 use App\Http\Resources\KnowledgeCoverageResource;
+use App\Managers\CalculationRunManager;
 use App\Managers\DashboardManager;
+use App\Metrics\Snapshots\MetricScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,7 +15,44 @@ class DashboardController extends Controller
 {
     public function __construct(
         private readonly DashboardManager $dashboardManager,
+        private readonly CalculationRunManager $calculationRunManager,
     ) {}
+
+    /**
+     * <summary>
+     *  Sync status of the org-wide metric recalculation (aggregates refresh or the
+     *  nightly full cascade) — state, last calculated time, live progress.
+     * </summary>
+     *
+     * @return CalculationSyncStatusResource state, last_calculated_at, progress, error
+     */
+    public function getDashboardSyncStatus(): CalculationSyncStatusResource
+    {
+        // Act (Manager)
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::Org, null);
+
+        // Return (Controller)
+        return new CalculationSyncStatusResource($status);
+    }
+
+    /**
+     * <summary>
+     *  Manually queue the FULL metric cascade (every project → every user → org
+     *  aggregates), same as the nightly run. Debounced — no-op when an org-scope
+     *  run is already pending. Returns the fresh sync status.
+     * </summary>
+     *
+     * @return JsonResponse HTTP 202 with the sync-status payload
+     */
+    public function triggerFullRecalculation(): JsonResponse
+    {
+        // Act (Manager)
+        $this->calculationRunManager->queueFullRecalculation();
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::Org, null);
+
+        // Return (Controller)
+        return (new CalculationSyncStatusResource($status))->response()->setStatusCode(202);
+    }
 
     /**
      * <summary>

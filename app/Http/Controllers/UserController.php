@@ -6,10 +6,13 @@ use App\Http\Requests\AttachUserSkillRequest;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Requests\UpdateUserSkillRequest;
+use App\Http\Resources\CalculationSyncStatusResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\UsersStatsResource;
 use App\Http\Resources\UserStatsResource;
+use App\Managers\CalculationRunManager;
 use App\Managers\UserManager;
+use App\Metrics\Snapshots\MetricScope;
 use App\Models\Project;
 use App\Models\Skill;
 use App\Models\User;
@@ -21,8 +24,46 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class UserController extends Controller
 {
     public function __construct(
-        private readonly UserManager $userManager
+        private readonly UserManager $userManager,
+        private readonly CalculationRunManager $calculationRunManager,
     ) {}
+
+    /**
+     * <summary>
+     *  Sync status of the user's metric recalculation — state, last calculated
+     *  time, live progress. Drives the SyncStatusCard on the employee detail page.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return CalculationSyncStatusResource state, last_calculated_at, progress, error
+     */
+    public function getUserSyncStatus(User $user): CalculationSyncStatusResource
+    {
+        // Act (Manager)
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::User, $user->id);
+
+        // Return (Controller)
+        return new CalculationSyncStatusResource($status);
+    }
+
+    /**
+     * <summary>
+     *  Manually queue a metrics recalculation for the user (debounced — no-op
+     *  when one is already pending). Returns the fresh sync status.
+     * </summary>
+     *
+     * @param User $user Route-model bound user
+     * @return JsonResponse HTTP 202 with the sync-status payload
+     */
+    public function triggerUserRecalculation(User $user): JsonResponse
+    {
+        // Act (Manager)
+        $this->calculationRunManager->queueUserRecalculation($user);
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::User, $user->id);
+
+        // Return (Controller)
+        return (new CalculationSyncStatusResource($status))->response()->setStatusCode(202);
+    }
 
     /**
      * <summary>

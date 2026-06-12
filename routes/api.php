@@ -30,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/stats', [DashboardController::class, 'getDashboardStats']);
     Route::get('/dashboard/knowledge-coverage', [DashboardController::class, 'getKnowledgeCoverage']);
     Route::get('/dashboard/upcoming-risk-events', [DashboardController::class, 'getUpcomingRiskEvents']);
+    Route::get('/dashboard/sync-status', [DashboardController::class, 'getDashboardSyncStatus']);
+    Route::post('/dashboard/recalculate', [DashboardController::class, 'triggerFullRecalculation']);
 
     /** ---------------------- [ PROJECTS ] ---------------------- */
     /* ----------------- SPECIALIZED ENDPOINTS ----------------- */
@@ -52,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /* ----------------- PROJECT-RELATED ENDPOINTS ----------------- */
     Route::get('/projects/{project}/stats', [ProjectController::class, 'getProjectStats']);
+    Route::get('/projects/{project}/sync-status', [ProjectController::class, 'getProjectSyncStatus']);
+    Route::post('/projects/{project}/recalculate', [ProjectController::class, 'triggerProjectRecalculation']);
     Route::get('/projects/{project}/coverage', [ProjectController::class, 'getProjectCoverage']);
     Route::get('/projects/{project}/knowledge-coverage', [ProjectController::class, 'getProjectKnowledgeCoverage']);
     Route::get('/projects/{project}/knowledge-coverage/summary', [ProjectController::class, 'getProjectKnowledgeCoverageSummary']);
@@ -80,6 +84,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /* ----------------- USER-RELATED ENDPOINTS ----------------- */
     Route::get('/users/{user}/stats', [UserController::class, 'getUserStats']);
+    Route::get('/users/{user}/sync-status', [UserController::class, 'getUserSyncStatus']);
+    Route::post('/users/{user}/recalculate', [UserController::class, 'triggerUserRecalculation']);
     Route::get('/users/{user}/criticality', [UserController::class, 'getUserCriticality']);
     Route::get('/users/{user}/recommendations', [UserController::class, 'getUserRecommendations']);
     Route::get('/users/{user}/competency-radar', [UserController::class, 'getUserCompetencyRadar']);

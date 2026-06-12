@@ -4,7 +4,6 @@ namespace App\Managers;
 
 use App\DTO\Stats\ProjectsStats;
 use App\DTO\Stats\ProjectStats;
-use App\Jobs\RecalculateProjectRiskJob;
 use App\Metrics\Calculators\AbsenceImpactCalculator;
 use App\Metrics\Calculators\BusFactorCalculator;
 use App\Metrics\Calculators\DeadlineCountdownCalculator;
@@ -26,6 +25,8 @@ use Throwable;
 
 class ProjectManager
 {
+    use Concerns\DispatchesRecalculations;
+
     public function __construct(
         private readonly SkillCoverageService $coverageService,
         private readonly ProjectService $projectService,
@@ -146,7 +147,7 @@ class ProjectManager
      *  skill requirements in the same transaction so the project lands fully wired.
      *  Orchestrates ProjectService for: row insert + user pivot batch + skill-requirement pivot batch.
      *
-     *  TODO(recalc): decide later whether to dispatch RecalculateProjectRiskJob here.
+     *  TODO(recalc): decide later whether to dispatch RecalculateProjectMetricsJob here.
      *    - Skip when no users + no skills attached (recalc would be a no-op).
      *    - Dispatch when at least one of user_ids / skill_requirements is present.
      *    Pending the new FragilityService landing — wire job dispatch then.
@@ -173,7 +174,7 @@ class ProjectManager
             return $project;
         });
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $this->dispatchProjectRecalculation($project);
 
         return $project->load(['users.department', 'skillRequirements.category']);
     }
@@ -193,7 +194,7 @@ class ProjectManager
 
     /**
      * <summary>
-     *  Update a project inside a transaction. Dispatches RecalculateProjectRiskJob when status or progress changed.
+     *  Update a project inside a transaction. Dispatches RecalculateProjectMetricsJob when status or progress changed.
      * </summary>
      *
      * @param Project $project Target project
@@ -204,7 +205,7 @@ class ProjectManager
     public function updateProject(Project $project, array $data): Project
     {
         $fresh = DB::transaction(fn() => $this->projectService->updateProject($project, $data));
-        RecalculateProjectRiskJob::dispatch($fresh);
+        $this->dispatchProjectRecalculation($fresh);
         return $fresh;
     }
 
@@ -269,7 +270,7 @@ class ProjectManager
     {
         DB::transaction(fn() => $this->projectService->attachUserToProject($project, $userId));
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $this->dispatchProjectRecalculation($project);
     }
 
     /**
@@ -286,7 +287,7 @@ class ProjectManager
     {
         DB::transaction(fn() => $this->projectService->detachUserFromProject($project, $userId));
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $this->dispatchProjectRecalculation($project);
     }
 
     /**
@@ -304,7 +305,7 @@ class ProjectManager
     {
         DB::transaction(fn() => $this->projectService->attachSkillToProject($project, $skillId, $requiredLevel));
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $this->dispatchProjectRecalculation($project);
     }
 
     /**
@@ -321,7 +322,7 @@ class ProjectManager
     {
         DB::transaction(fn() => $this->projectService->detachSkillFromProject($project, $skillId));
 
-        RecalculateProjectRiskJob::dispatch($project);
+        $this->dispatchProjectRecalculation($project);
     }
 
     /**
@@ -336,7 +337,7 @@ class ProjectManager
     public function pauseProject(Project $project): Project
     {
         $fresh = DB::transaction(fn() => $this->projectService->pauseProject($project));
-        RecalculateProjectRiskJob::dispatch($fresh);
+        $this->dispatchProjectRecalculation($fresh);
         return $fresh;
     }
 
@@ -352,7 +353,7 @@ class ProjectManager
     public function resumeProject(Project $project): Project
     {
         $fresh = DB::transaction(fn() => $this->projectService->resumeProject($project));
-        RecalculateProjectRiskJob::dispatch($fresh);
+        $this->dispatchProjectRecalculation($fresh);
         return $fresh;
     }
 
@@ -368,7 +369,7 @@ class ProjectManager
     public function completeProject(Project $project): Project
     {
         $fresh = DB::transaction(fn() => $this->projectService->completeProject($project));
-        RecalculateProjectRiskJob::dispatch($fresh);
+        $this->dispatchProjectRecalculation($fresh);
         return $fresh;
     }
 
@@ -384,7 +385,7 @@ class ProjectManager
     public function reopenProject(Project $project): Project
     {
         $fresh = DB::transaction(fn() => $this->projectService->reopenProject($project));
-        RecalculateProjectRiskJob::dispatch($fresh);
+        $this->dispatchProjectRecalculation($fresh);
         return $fresh;
     }
 

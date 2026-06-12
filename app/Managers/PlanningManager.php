@@ -10,7 +10,7 @@ use Throwable;
 
 class PlanningManager
 {
-    use Concerns\DispatchesProjectRecalculations;
+    use Concerns\DispatchesRecalculations;
 
     public function __construct(
         private readonly PlanningService $planningService,

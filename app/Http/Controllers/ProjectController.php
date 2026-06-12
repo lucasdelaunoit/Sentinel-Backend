@@ -6,10 +6,13 @@ use App\Http\Requests\AttachSkillToProjectRequest;
 use App\Http\Requests\AttachUserToProjectRequest;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
+use App\Http\Resources\CalculationSyncStatusResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\ProjectStatsResource;
 use App\Http\Resources\ProjectsStatsResource;
+use App\Managers\CalculationRunManager;
 use App\Managers\ProjectManager;
+use App\Metrics\Snapshots\MetricScope;
 use App\Models\Project;
 use App\Models\Skill;
 use App\Models\User;
@@ -22,7 +25,45 @@ class ProjectController extends Controller
 {
     public function __construct(
         private readonly ProjectManager $projectManager,
+        private readonly CalculationRunManager $calculationRunManager,
     ) {}
+
+    /**
+     * <summary>
+     *  Sync status of the project's metric recalculation — state, last calculated
+     *  time, live progress. Drives the SyncStatusCard on the project detail page.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return CalculationSyncStatusResource state, last_calculated_at, progress, error
+     */
+    public function getProjectSyncStatus(Project $project): CalculationSyncStatusResource
+    {
+        // Act (Manager)
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::Project, $project->id);
+
+        // Return (Controller)
+        return new CalculationSyncStatusResource($status);
+    }
+
+    /**
+     * <summary>
+     *  Manually queue a metrics recalculation for the project (debounced — no-op
+     *  when one is already pending). Returns the fresh sync status.
+     * </summary>
+     *
+     * @param Project $project Route-model bound project
+     * @return JsonResponse HTTP 202 with the sync-status payload
+     */
+    public function triggerProjectRecalculation(Project $project): JsonResponse
+    {
+        // Act (Manager)
+        $this->calculationRunManager->queueProjectRecalculation($project);
+        $status = $this->calculationRunManager->getSyncStatus(MetricScope::Project, $project->id);
+
+        // Return (Controller)
+        return (new CalculationSyncStatusResource($status))->response()->setStatusCode(202);
+    }
 
     /**
      * <summary>
